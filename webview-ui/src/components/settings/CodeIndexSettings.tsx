@@ -40,7 +40,16 @@ interface CodeIndexSettingsProps {
 	areSettingsCommitted: boolean
 }
 
-import type { IndexingStatusUpdateMessage } from "@roo/ExtensionMessage"
+interface IndexingStatusUpdateMessage {
+	type: "indexingStatusUpdate"
+	values: {
+		systemStatus: string
+		message?: string
+		processedItems: number
+		totalItems: number
+		currentItemUnit?: string
+	}
+}
 
 export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 	codebaseIndexModels,
@@ -122,7 +131,9 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 		if (!config) return false
 
 		const baseSchema = z.object({
-			codebaseIndexQdrantUrl: z.string().url("Qdrant URL must be a valid URL"),
+			codebaseIndexVectorStoreType: z.enum(["qdrant", "faiss", "chroma"]),
+			codebaseIndexVectorStoreUrl: z.string().url("Vector store URL must be a valid URL"),
+			codebaseIndexVectorStoreApiKey: z.string().optional(),
 			codebaseIndexEmbedderModelId: z.string().min(1, "Model ID is required"),
 		})
 
@@ -419,17 +430,46 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 						</div>
 					)}
 
+					{/* put up a dropdown for selecting the vectorstoretype */}
+
+					<div className="flex items-center gap-4 font-bold">
+						<div>{t("settings:codeIndex.vectorStoreTypeLabel")}</div>
+					</div>
+					<div>
+						<div className="flex items-center gap-2">
+							<Select
+								value={codebaseIndexConfig?.codebaseIndexVectorStoreType || "qdrant"}
+								onValueChange={(value) =>
+									setCachedStateField("codebaseIndexConfig", {
+										...codebaseIndexConfig,
+										codebaseIndexVectorStoreType: value as "qdrant" | "faiss" | "chroma",
+									})
+								}>
+								<SelectTrigger className="w-full">
+									<SelectValue
+										placeholder={t("settings:codeIndex.selectVectorStoreTypePlaceholder")}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="qdrant">{t("settings:codeIndex.qdrantVectorStore")}</SelectItem>
+									<SelectItem value="faiss">{t("settings:codeIndex.faissVectorStore")}</SelectItem>
+									<SelectItem value="chroma">{t("settings:codeIndex.chromaVectorStore")}</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+
 					<div className="flex flex-col gap-3">
 						<div className="flex items-center gap-4 font-bold">
-							<div>{t("settings:codeIndex.qdrantUrlLabel")}</div>
+							<div>{t("settings:codeIndex.vectorStoreUrlLabel")}</div>
 						</div>
 						<div>
 							<VSCodeTextField
-								value={codebaseIndexConfig.codebaseIndexQdrantUrl || "http://localhost:6333"}
+								value={codebaseIndexConfig.codebaseIndexVectorStoreUrl || "http://localhost:6333"}
 								onInput={(e: any) =>
 									setCachedStateField("codebaseIndexConfig", {
 										...codebaseIndexConfig,
-										codebaseIndexQdrantUrl: e.target.value,
+										codebaseIndexVectorStoreUrl: e.target.value,
 									})
 								}
 								style={{ width: "100%" }}></VSCodeTextField>
@@ -438,13 +478,15 @@ export const CodeIndexSettings: React.FC<CodeIndexSettingsProps> = ({
 
 					<div className="flex flex-col gap-3">
 						<div className="flex items-center gap-4 font-bold">
-							<div>{t("settings:codeIndex.qdrantKeyLabel")}</div>
+							<div>{t("settings:codeIndex.vectorStoreKeyLabel")}</div>
 						</div>
 						<div>
 							<VSCodeTextField
 								type="password"
-								value={apiConfiguration.codeIndexQdrantApiKey}
-								onInput={(e: any) => setApiConfigurationField("codeIndexQdrantApiKey", e.target.value)}
+								value={apiConfiguration.codebaseIndexVectorStoreApiKey}
+								onInput={(e: any) =>
+									setApiConfigurationField("codebaseIndexVectorStoreApiKey", e.target.value)
+								}
 								style={{ width: "100%" }}></VSCodeTextField>
 						</div>
 					</div>

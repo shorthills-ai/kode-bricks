@@ -1,10 +1,13 @@
 import { WebviewMessage } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug, getGroupName } from "../../shared/modes"
+import { defaultDomainSlug, getDomainBySlug } from "../../shared/domains"
 import { buildApiHandler } from "../../api"
+
 import { experiments as experimentsModule, EXPERIMENT_IDS } from "../../shared/experiments"
 
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
+
 import { MultiFileSearchReplaceDiffStrategy } from "../diff/strategies/multi-file-search-replace"
 
 import { ClineProvider } from "./ClineProvider"
@@ -39,6 +42,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 	const cwd = provider.cwd
 
 	const mode = message.mode ?? defaultModeSlug
+	const domain = message.domain ?? defaultDomainSlug
 	const customModes = await provider.customModesManager.getCustomModes()
 
 	const rooIgnoreInstructions = provider.getCurrentCline()?.rooIgnoreController?.getInstructions()
@@ -71,6 +75,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 		diffStrategy,
 		browserViewportSize ?? "900x600",
 		mode,
+		domain,
 		customModePrompts,
 		customModes,
 		customInstructions,

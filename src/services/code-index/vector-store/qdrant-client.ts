@@ -35,6 +35,7 @@ export class QdrantVectorStore implements IVectorStore {
 		const hash = createHash("sha256").update(workspacePath).digest("hex")
 		this.vectorSize = vectorSize
 		this.collectionName = `ws-${hash.substring(0, 16)}`
+		console.log(`[QdrantVectorStore] Collection name: ${this.collectionName}`)
 	}
 
 	private async getCollectionInfo(): Promise<Schemas["CollectionInfo"] | null> {
@@ -59,6 +60,10 @@ export class QdrantVectorStore implements IVectorStore {
 	async initialize(): Promise<boolean> {
 		let created = false
 		try {
+			console.debug("[QdrantVectorStoreFile] Initializing Qdrant collection...")
+			// Add log to check connection before creating collection
+			// await this.client.getCollection(this.collectionName);
+			console.debug("[QdrantVectorStoreFile] Connection to Qdrant successful.")
 			const collectionInfo = await this.getCollectionInfo()
 
 			if (collectionInfo === null) {
@@ -70,6 +75,7 @@ export class QdrantVectorStore implements IVectorStore {
 					},
 				})
 				created = true
+				console.log(`[QdrantVectorStore] Collection ${this.collectionName} created successfully.`)
 			} else {
 				// Collection exists, check vector size
 				const existingVectorSize = collectionInfo.config?.params?.vectors?.size
@@ -88,6 +94,7 @@ export class QdrantVectorStore implements IVectorStore {
 						},
 					})
 					created = true
+					console.log(`[QdrantVectorStore] Collection ${this.collectionName} recreated successfully.`)
 				}
 			}
 
@@ -283,6 +290,10 @@ export class QdrantVectorStore implements IVectorStore {
 	}
 
 	/**
+console.log('[QdrantVectorStore] Clearing Qdrant collection...');
+			// Add log to check connection before clearing collection
+			await this.client.getCollection(this.collectionName);
+			console.log('[QdrantVectorStore] Connection to Qdrant successful.');
 	 * Clears all points from the collection
 	 */
 	async clearCollection(): Promise<void> {

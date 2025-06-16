@@ -53,7 +53,7 @@ import { applyDiffToolLegacy } from "../tools/applyDiffTool"
 
 export async function presentAssistantMessage(cline: Task) {
 	if (cline.abort) {
-		throw new Error(`[Task#presentAssistantMessage] task ${cline.taskId}.${cline.instanceId} aborted`)
+		throw new Error(`[Cline#presentAssistantMessage] task ${cline.taskId}.${cline.instanceId} aborted`)
 	}
 
 	if (cline.presentAssistantMessageLocked) {
@@ -203,6 +203,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name}]`
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
+					case "switch_domain":
+						return `[${block.name} to '${block.params.domain}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "codebase_search": // Add case for the new tool
 						return `[${block.name} for '${block.params.query}']`
 					case "new_task": {

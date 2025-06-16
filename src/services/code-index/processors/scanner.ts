@@ -27,7 +27,7 @@ import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
 export class DirectoryScanner implements IDirectoryScanner {
 	constructor(
 		private readonly embedder: IEmbedder,
-		private readonly qdrantClient: IVectorStore,
+		private readonly vectorStoreClient: IVectorStore,
 		private readonly codeParser: ICodeParser,
 		private readonly cacheManager: CacheManager,
 		private readonly ignoreInstance: Ignore,
@@ -131,7 +131,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 					processedCount++
 
 					// Process embeddings if configured
-					if (this.embedder && this.qdrantClient && blocks.length > 0) {
+					if (this.embedder && this.vectorStoreClient && blocks.length > 0) {
 						// Add to batch accumulators
 						let addedBlocksFromFile = false
 						for (const block of blocks) {
@@ -225,9 +225,9 @@ export class DirectoryScanner implements IDirectoryScanner {
 		for (const cachedFilePath of Object.keys(oldHashes)) {
 			if (!processedFiles.has(cachedFilePath)) {
 				// File was deleted or is no longer supported/indexed
-				if (this.qdrantClient) {
+				if (this.vectorStoreClient) {
 					try {
-						await this.qdrantClient.deletePointsByFilePath(cachedFilePath)
+						await this.vectorStoreClient.deletePointsByFilePath(cachedFilePath)
 						await this.cacheManager.deleteHash(cachedFilePath)
 					} catch (error) {
 						console.error(`[DirectoryScanner] Failed to delete points for ${cachedFilePath}:`, error)
@@ -280,7 +280,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				]
 				if (uniqueFilePaths.length > 0) {
 					try {
-						await this.qdrantClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
+						await this.vectorStoreClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
 					} catch (deleteError) {
 						console.error(
 							`[DirectoryScanner] Failed to delete points for ${uniqueFilePaths.length} files before upsert:`,
@@ -315,7 +315,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				})
 
 				// Upsert points to Qdrant
-				await this.qdrantClient.upsertPoints(points)
+				await this.vectorStoreClient.upsertPoints(points)
 				onBlocksIndexed?.(batchBlocks.length)
 
 				// Update hashes for successfully processed files in this batch

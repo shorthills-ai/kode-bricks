@@ -39,6 +39,7 @@ import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ExtensionMessage } from "../../shared/ExtensionMessage"
 import { Mode, defaultModeSlug } from "../../shared/modes"
+import { Domain, defaultDomainSlug } from "../../shared/domains"
 import { experimentDefault, experiments, EXPERIMENT_IDS } from "../../shared/experiments"
 import { formatLanguage } from "../../shared/language"
 import { Terminal } from "../../integrations/terminal/Terminal"
@@ -149,7 +150,6 @@ export class ClineProvider
 			.catch((error) => {
 				this.log(`Failed to initialize MCP Hub: ${error}`)
 			})
-
 		this.marketplaceManager = new MarketplaceManager(this.context)
 	}
 
@@ -167,6 +167,10 @@ export class ClineProvider
 
 		if (!state || typeof state.mode !== "string") {
 			throw new Error(t("common:errors.retrieve_current_mode"))
+		}
+
+		if (!state.domain || typeof state.domain !== "string") {
+			throw new Error(t("common:errors.retrieve_current_domain"))
 		}
 	}
 
@@ -497,8 +501,6 @@ export class ClineProvider
 
 		// If the extension is starting a new session, clear previous task state.
 		await this.removeClineFromStack()
-
-		// Set initial VSCode context for experiments
 		await this.updateVSCodeContext()
 
 		this.log("Webview view resolved")
@@ -777,8 +779,7 @@ export class ClineProvider
 	 * @param webview A reference to the extension webview
 	 */
 	private setWebviewMessageListener(webview: vscode.Webview) {
-		const onReceiveMessage = async (message: WebviewMessage) =>
-			webviewMessageHandler(this, message, this.marketplaceManager)
+		const onReceiveMessage = async (message: WebviewMessage) => webviewMessageHandler(this, message)
 
 		const messageDisposable = webview.onDidReceiveMessage(onReceiveMessage)
 		this.webviewDisposables.push(messageDisposable)
@@ -828,6 +829,21 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	public async handleDomainSwitch(newDomain: Domain) {
+		console.debug("[Domain] handleDomainSwitch called with:", newDomain)
+		const cline = this.getCurrentCline()
+
+		if (cline) {
+			console.debug("[Domain] Current cline found. taskId:", cline.taskId)
+			TelemetryService.instance.captureDomainSwitch(cline.taskId, newDomain)
+			cline.emit("taskModeSwitched", cline.taskId, newDomain)
+		}
+
+		await this.updateGlobalState("domain", newDomain)
+		console.debug("[Domain] Global state updated with new domain:", newDomain)
+		await this.postStateToWebview()
+		console.debug("[Domain] postStateToWebview called after domain switch.")
+	}
 	// Provider Profile Management
 
 	getProviderProfileEntries(): ProviderSettingsEntry[] {
@@ -1268,6 +1284,10 @@ export class ClineProvider
 	}
 
 	async getStateToPostToWebview() {
+		const state = await this.getState()
+
+		// Patch: ensure experiments is always a complete Record<ExperimentId, boolean>
+		const experiments = { ...experimentDefault, ...state.experiments }
 		const {
 			apiConfiguration,
 			lastShownAnnouncementId,
@@ -1321,7 +1341,6 @@ export class ClineProvider
 			enhancementApiConfigId,
 			autoApprovalEnabled,
 			customModes,
-			experiments,
 			maxOpenTabsContext,
 			maxWorkspaceFiles,
 			browserToolEnabled,
@@ -1357,106 +1376,107 @@ export class ClineProvider
 		}
 
 		// Check if there's a system prompt override for the current mode
-		const currentMode = mode ?? defaultModeSlug
+		const currentMode = state.mode ?? defaultModeSlug
+		const currentDomain = state.domain ?? defaultModeSlug
 		const hasSystemPromptOverride = await this.hasFileBasedSystemPromptOverride(currentMode)
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			marketplaceItems,
 			marketplaceInstalledMetadata,
-			apiConfiguration,
-			customInstructions,
-			alwaysAllowReadOnly: alwaysAllowReadOnly ?? false,
-			alwaysAllowReadOnlyOutsideWorkspace: alwaysAllowReadOnlyOutsideWorkspace ?? false,
-			alwaysAllowWrite: alwaysAllowWrite ?? false,
-			alwaysAllowWriteOutsideWorkspace: alwaysAllowWriteOutsideWorkspace ?? false,
+			apiConfiguration: state.apiConfiguration,
+			customInstructions: state.customInstructions,
+			alwaysAllowReadOnly: state.alwaysAllowReadOnly ?? false,
+			alwaysAllowReadOnlyOutsideWorkspace: state.alwaysAllowReadOnlyOutsideWorkspace ?? false,
+			alwaysAllowWrite: state.alwaysAllowWrite ?? false,
+			alwaysAllowWriteOutsideWorkspace: state.alwaysAllowWriteOutsideWorkspace ?? false,
 			alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? false,
-			alwaysAllowExecute: alwaysAllowExecute ?? false,
-			alwaysAllowBrowser: alwaysAllowBrowser ?? false,
-			alwaysAllowMcp: alwaysAllowMcp ?? false,
-			alwaysAllowModeSwitch: alwaysAllowModeSwitch ?? false,
-			alwaysAllowSubtasks: alwaysAllowSubtasks ?? false,
-			allowedMaxRequests,
-			autoCondenseContext: autoCondenseContext ?? true,
-			autoCondenseContextPercent: autoCondenseContextPercent ?? 100,
+			alwaysAllowExecute: state.alwaysAllowExecute ?? false,
+			alwaysAllowBrowser: state.alwaysAllowBrowser ?? false,
+			alwaysAllowMcp: state.alwaysAllowMcp ?? false,
+			alwaysAllowModeSwitch: state.alwaysAllowModeSwitch ?? false,
+			alwaysAllowSubtasks: state.alwaysAllowSubtasks ?? false,
+			allowedMaxRequests: state.allowedMaxRequests,
+			autoCondenseContext: state.autoCondenseContext ?? true,
+			autoCondenseContextPercent: state.autoCondenseContextPercent ?? 100,
 			uriScheme: vscode.env.uriScheme,
 			currentTaskItem: this.getCurrentCline()?.taskId
-				? (taskHistory || []).find((item: HistoryItem) => item.id === this.getCurrentCline()?.taskId)
+				? (state.taskHistory || []).find((item: HistoryItem) => item.id === this.getCurrentCline()?.taskId)
 				: undefined,
 			clineMessages: this.getCurrentCline()?.clineMessages || [],
-			taskHistory: (taskHistory || [])
+			taskHistory: (state.taskHistory || [])
 				.filter((item: HistoryItem) => item.ts && item.task)
 				.sort((a: HistoryItem, b: HistoryItem) => b.ts - a.ts),
-			soundEnabled: soundEnabled ?? false,
-			ttsEnabled: ttsEnabled ?? false,
-			ttsSpeed: ttsSpeed ?? 1.0,
-			diffEnabled: diffEnabled ?? true,
-			enableCheckpoints: enableCheckpoints ?? true,
+			soundEnabled: state.soundEnabled ?? false,
+			ttsEnabled: state.ttsEnabled ?? false,
+			ttsSpeed: state.ttsSpeed ?? 1.0,
+			diffEnabled: state.diffEnabled ?? true,
+			enableCheckpoints: state.enableCheckpoints ?? true,
 			shouldShowAnnouncement:
-				telemetrySetting !== "unset" && lastShownAnnouncementId !== this.latestAnnouncementId,
+				state.telemetrySetting !== "unset" && state.lastShownAnnouncementId !== this.latestAnnouncementId,
 			allowedCommands,
-			soundVolume: soundVolume ?? 0.5,
-			browserViewportSize: browserViewportSize ?? "900x600",
-			screenshotQuality: screenshotQuality ?? 75,
-			remoteBrowserHost,
-			remoteBrowserEnabled: remoteBrowserEnabled ?? false,
-			cachedChromeHostUrl: cachedChromeHostUrl,
-			writeDelayMs: writeDelayMs ?? 1000,
-			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
-			terminalShellIntegrationTimeout: terminalShellIntegrationTimeout ?? Terminal.defaultShellIntegrationTimeout,
-			terminalShellIntegrationDisabled: terminalShellIntegrationDisabled ?? false,
-			terminalCommandDelay: terminalCommandDelay ?? 0,
-			terminalPowershellCounter: terminalPowershellCounter ?? false,
-			terminalZshClearEolMark: terminalZshClearEolMark ?? true,
-			terminalZshOhMy: terminalZshOhMy ?? false,
-			terminalZshP10k: terminalZshP10k ?? false,
-			terminalZdotdir: terminalZdotdir ?? false,
-			fuzzyMatchThreshold: fuzzyMatchThreshold ?? 1.0,
-			mcpEnabled: mcpEnabled ?? true,
-			enableMcpServerCreation: enableMcpServerCreation ?? true,
-			alwaysApproveResubmit: alwaysApproveResubmit ?? false,
-			requestDelaySeconds: requestDelaySeconds ?? 10,
-			currentApiConfigName: currentApiConfigName ?? "default",
-			listApiConfigMeta: listApiConfigMeta ?? [],
-			pinnedApiConfigs: pinnedApiConfigs ?? {},
-			mode: mode ?? defaultModeSlug,
-			customModePrompts: customModePrompts ?? {},
-			customSupportPrompts: customSupportPrompts ?? {},
-			enhancementApiConfigId,
-			autoApprovalEnabled: autoApprovalEnabled ?? false,
-			customModes,
-			experiments: experiments ?? experimentDefault,
+			soundVolume: state.soundVolume,
+			browserViewportSize: state.browserViewportSize ?? "900x600",
+			screenshotQuality: state.screenshotQuality ?? 75,
+			remoteBrowserHost: state.remoteBrowserHost,
+			remoteBrowserEnabled: state.remoteBrowserEnabled ?? false,
+			cachedChromeHostUrl: state.cachedChromeHostUrl as string | undefined,
+			writeDelayMs: state.writeDelayMs ?? 1000,
+			terminalOutputLineLimit: state.terminalOutputLineLimit ?? 500,
+			terminalShellIntegrationTimeout:
+				state.terminalShellIntegrationTimeout ?? Terminal.defaultShellIntegrationTimeout,
+			terminalShellIntegrationDisabled: state.terminalShellIntegrationDisabled ?? false,
+			terminalCommandDelay: state.terminalCommandDelay ?? 0,
+			terminalPowershellCounter: state.terminalPowershellCounter ?? false,
+			terminalZshClearEolMark: state.terminalZshClearEolMark ?? true,
+			terminalZshOhMy: state.terminalZshOhMy ?? false,
+			terminalZshP10k: state.terminalZshP10k ?? false,
+			terminalZdotdir: state.terminalZdotdir ?? false,
+			fuzzyMatchThreshold: state.fuzzyMatchThreshold ?? 1.0,
+			mcpEnabled: state.mcpEnabled ?? true,
+			enableMcpServerCreation: state.enableMcpServerCreation ?? true,
+			alwaysApproveResubmit: state.alwaysApproveResubmit ?? false,
+			requestDelaySeconds: Math.max(5, state.requestDelaySeconds ?? 10),
+			currentApiConfigName: state.currentApiConfigName ?? "default",
+			listApiConfigMeta: state.listApiConfigMeta ?? [],
+			pinnedApiConfigs: state.pinnedApiConfigs ?? {},
+			mode: state.mode ?? defaultModeSlug,
+			domain: state.domain ?? defaultModeSlug,
+			customModePrompts: state.customModePrompts ?? {},
+			customSupportPrompts: state.customSupportPrompts ?? {},
+			enhancementApiConfigId: state.enhancementApiConfigId,
+			experiments,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
-			maxOpenTabsContext: maxOpenTabsContext ?? 20,
-			maxWorkspaceFiles: maxWorkspaceFiles ?? 200,
+			maxOpenTabsContext: state.maxOpenTabsContext ?? 20,
+			maxWorkspaceFiles: state.maxWorkspaceFiles ?? 200,
 			cwd,
-			browserToolEnabled: browserToolEnabled ?? true,
-			telemetrySetting,
+			browserToolEnabled: state.browserToolEnabled ?? true,
+			telemetrySetting: state.telemetrySetting || "unset",
 			telemetryKey,
 			machineId,
-			showRooIgnoredFiles: showRooIgnoredFiles ?? true,
-			language: language ?? formatLanguage(vscode.env.language),
+			showRooIgnoredFiles: state.showRooIgnoredFiles ?? true,
+			language: state.language ?? formatLanguage(vscode.env.language),
 			renderContext: this.renderContext,
-			maxReadFileLine: maxReadFileLine ?? -1,
-			maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
-			settingsImportedAt: this.settingsImportedAt,
-			terminalCompressProgressBar: terminalCompressProgressBar ?? true,
-			hasSystemPromptOverride,
-			historyPreviewCollapsed: historyPreviewCollapsed ?? false,
-			cloudUserInfo,
-			cloudIsAuthenticated: cloudIsAuthenticated ?? false,
-			sharingEnabled: sharingEnabled ?? false,
-			organizationAllowList,
-			condensingApiConfigId,
-			customCondensingPrompt,
-			codebaseIndexModels: codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
-			codebaseIndexConfig: codebaseIndexConfig ?? {
+			maxReadFileLine: state.maxReadFileLine ?? -1,
+			maxConcurrentFileReads: state.maxConcurrentFileReads ?? 5,
+			historyPreviewCollapsed: state.historyPreviewCollapsed ?? false,
+			cloudUserInfo: state.cloudUserInfo,
+			cloudIsAuthenticated: state.cloudIsAuthenticated,
+			sharingEnabled: state.sharingEnabled ?? false,
+			organizationAllowList: state.organizationAllowList,
+			condensingApiConfigId: state.condensingApiConfigId,
+			customCondensingPrompt: state.customCondensingPrompt,
+			codebaseIndexModels: state.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
+			codebaseIndexConfig: state.codebaseIndexConfig ?? {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreApiKey: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
 			},
+			customModes: customModes,
 		}
 	}
 
@@ -1521,6 +1541,10 @@ export class ClineProvider
 			)
 		}
 
+		// Patch: ensure experiments is always a complete Record<ExperimentId, boolean>
+		const rawExperiments = stateValues.experiments ?? {}
+		const experiments = { ...experimentDefault, ...rawExperiments }
+
 		// Return the same structure as before
 		return {
 			apiConfiguration: providerSettings,
@@ -1567,6 +1591,7 @@ export class ClineProvider
 			terminalZdotdir: stateValues.terminalZdotdir ?? false,
 			terminalCompressProgressBar: stateValues.terminalCompressProgressBar ?? true,
 			mode: stateValues.mode ?? defaultModeSlug,
+			domain: stateValues.domain ?? defaultModeSlug,
 			language: stateValues.language ?? formatLanguage(vscode.env.language),
 			mcpEnabled: stateValues.mcpEnabled ?? true,
 			enableMcpServerCreation: stateValues.enableMcpServerCreation ?? true,
@@ -1579,9 +1604,9 @@ export class ClineProvider
 			customModePrompts: stateValues.customModePrompts ?? {},
 			customSupportPrompts: stateValues.customSupportPrompts ?? {},
 			enhancementApiConfigId: stateValues.enhancementApiConfigId,
-			experiments: stateValues.experiments ?? experimentDefault,
+			experiments,
 			autoApprovalEnabled: stateValues.autoApprovalEnabled ?? false,
-			customModes,
+			customModes: customModes,
 			maxOpenTabsContext: stateValues.maxOpenTabsContext ?? 20,
 			maxWorkspaceFiles: stateValues.maxWorkspaceFiles ?? 200,
 			openRouterUseMiddleOutTransform: stateValues.openRouterUseMiddleOutTransform ?? true,
@@ -1601,7 +1626,9 @@ export class ClineProvider
 			codebaseIndexModels: stateValues.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: stateValues.codebaseIndexConfig ?? {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreApiKey: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
@@ -1706,7 +1733,7 @@ export class ClineProvider
 	 * like the current mode, API provider, etc.
 	 */
 	public async getTelemetryProperties(): Promise<TelemetryProperties> {
-		const { mode, apiConfiguration, language } = await this.getState()
+		const { mode, domain, apiConfiguration, language } = await this.getState()
 		const task = this.getCurrentCline()
 
 		const packageJSON = this.context.extension?.packageJSON
@@ -1719,6 +1746,7 @@ export class ClineProvider
 			editorName: vscode.env.appName,
 			language,
 			mode,
+			domain,
 			apiProvider: apiConfiguration?.apiProvider,
 			modelId: task?.api?.getModel().id,
 			diffStrategy: task?.diffStrategy?.getName(),

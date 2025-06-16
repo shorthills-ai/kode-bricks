@@ -1,17 +1,16 @@
-import { vitest, describe, it, expect, beforeEach } from "vitest"
 import { ContextProxy } from "../../../core/config/ContextProxy"
 import { CodeIndexConfigManager } from "../config-manager"
 
 describe("CodeIndexConfigManager", () => {
-	let mockContextProxy: any
+	let mockContextProxy: jest.Mocked<ContextProxy>
 	let configManager: CodeIndexConfigManager
 
 	beforeEach(() => {
 		// Setup mock ContextProxy
 		mockContextProxy = {
-			getGlobalState: vitest.fn(),
-			getSecret: vitest.fn().mockReturnValue(undefined),
-		}
+			getGlobalState: jest.fn(),
+			getSecret: jest.fn().mockReturnValue(undefined),
+		} as unknown as jest.Mocked<ContextProxy>
 
 		configManager = new CodeIndexConfigManager(mockContextProxy)
 	})
@@ -38,9 +37,6 @@ describe("CodeIndexConfigManager", () => {
 				modelId: undefined,
 				openAiOptions: { openAiNativeApiKey: "" },
 				ollamaOptions: { ollamaBaseUrl: "" },
-				qdrantUrl: "http://localhost:6333",
-				qdrantApiKey: "",
-				searchMinScore: 0.4,
 			})
 			expect(result.requiresRestart).toBe(false)
 		})
@@ -48,7 +44,6 @@ describe("CodeIndexConfigManager", () => {
 		it("should load configuration from globalState and secrets", async () => {
 			const mockGlobalState = {
 				codebaseIndexEnabled: true,
-				codebaseIndexQdrantUrl: "http://qdrant.local",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "text-embedding-3-large",
@@ -953,13 +948,6 @@ describe("CodeIndexConfigManager", () => {
 
 		it("should return correct embedder provider", () => {
 			expect(configManager.currentEmbedderProvider).toBe("openai")
-		})
-
-		it("should return correct Qdrant configuration", () => {
-			expect(configManager.qdrantConfig).toEqual({
-				url: "http://qdrant.local",
-				apiKey: "test-qdrant-key",
-			})
 		})
 
 		it("should return correct model ID", () => {

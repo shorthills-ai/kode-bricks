@@ -6,7 +6,9 @@ import { z } from "zod"
 
 export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexEnabled: z.boolean().optional(),
-	codebaseIndexQdrantUrl: z.string().optional(),
+	codebaseIndexVectorStoreType: z.enum(["qdrant", "faiss", "chroma"]).optional(),
+	codebaseIndexVectorStoreUrl: z.string().optional(),
+	codebaseIndexVectorStoreApiKey: z.string().optional(),
 	codebaseIndexEmbedderProvider: z.enum(["openai", "ollama", "openai-compatible"]).optional(),
 	codebaseIndexEmbedderBaseUrl: z.string().optional(),
 	codebaseIndexEmbedderModelId: z.string().optional(),
@@ -32,7 +34,9 @@ export type CodebaseIndexModels = z.infer<typeof codebaseIndexModelsSchema>
 
 export const codebaseIndexProviderSchema = z.object({
 	codeIndexOpenAiKey: z.string().optional(),
-	codeIndexQdrantApiKey: z.string().optional(),
+	codebaseIndexVectorStoreType: z.enum(["qdrant", "faiss", "chroma"]).optional(),
+	codebaseIndexVectorStoreUrl: z.string().optional(),
+	codebaseIndexVectorStoreApiKey: z.string().optional(),
 	codebaseIndexOpenAiCompatibleBaseUrl: z.string().optional(),
 	codebaseIndexOpenAiCompatibleApiKey: z.string().optional(),
 	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
