@@ -4,8 +4,9 @@ import type {
 	ProviderSettings,
 	HistoryItem,
 	ModeConfig,
+	DomainConfig,
 	TelemetrySetting,
-	Experiments,
+	ExperimentId,
 	ClineMessage,
 	OrganizationAllowList,
 	CloudUserInfo,
@@ -15,6 +16,7 @@ import { GitCommit } from "../utils/git"
 
 import { McpServer } from "./mcp"
 import { Mode } from "./modes"
+import { Domain } from "./domains"
 import { RouterModels } from "./api"
 import type { MarketplaceItem } from "@roo-code/types"
 
@@ -122,6 +124,7 @@ export interface ExtensionMessage {
 	commits?: GitCommit[]
 	listApiConfig?: ProviderSettingsEntry[]
 	mode?: Mode
+	domain?: Domain
 	customMode?: ModeConfig
 	slug?: string
 	success?: boolean
@@ -132,7 +135,7 @@ export interface ExtensionMessage {
 	error?: string
 	setting?: string
 	value?: any
-	items?: MarketplaceItem[]
+	// items?: MarketplaceItem[]
 	userInfo?: CloudUserInfo
 	organizationAllowList?: OrganizationAllowList
 	tab?: string
@@ -223,12 +226,13 @@ export type ExtensionState = Pick<
 	showRooIgnoredFiles: boolean // Whether to show .rooignore'd files in listings
 	maxReadFileLine: number // Maximum number of lines to read from a file before truncating
 
-	experiments: Experiments // Map of experiment IDs to their enabled state
+	experiments: Record<ExperimentId, boolean> // Map of experiment IDs to their enabled state
 
 	mcpEnabled: boolean
 	enableMcpServerCreation: boolean
 
 	mode: Mode
+	domain: Domain
 	customModes: ModeConfig[]
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true} if diffEnabled)
 
@@ -248,7 +252,7 @@ export type ExtensionState = Pick<
 
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
-	marketplaceItems?: MarketplaceItem[]
+	// marketplaceItems?: MarketplaceItem[]
 	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 }
 
@@ -275,6 +279,7 @@ export interface ClineSayTool {
 	regex?: string
 	filePattern?: string
 	mode?: string
+	domain?: string
 	reason?: string
 	isOutsideWorkspace?: boolean
 	isProtected?: boolean
@@ -341,7 +346,6 @@ export interface ClineAskUseMcpServer {
 	toolName?: string
 	arguments?: string
 	uri?: string
-	response?: string
 }
 
 export interface ClineApiReqInfo {

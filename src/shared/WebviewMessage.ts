@@ -10,6 +10,7 @@ import type {
 import { marketplaceItemSchema } from "@roo-code/types"
 
 import { Mode } from "./modes"
+import { Domain } from "domain"
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
 
@@ -58,7 +59,6 @@ export interface WebviewMessage {
 		| "requestLmStudioModels"
 		| "requestVsCodeLmModels"
 		| "openImage"
-		| "saveImage"
 		| "openFile"
 		| "openMention"
 		| "cancelTask"
@@ -116,6 +116,7 @@ export interface WebviewMessage {
 		| "requestDelaySeconds"
 		| "setApiConfigPassword"
 		| "mode"
+		| "domain"
 		| "updatePrompt"
 		| "updateSupportPrompt"
 		| "getSystemPrompt"
@@ -157,20 +158,8 @@ export interface WebviewMessage {
 		| "indexingStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
-		| "setHistoryPreviewCollapsed"
-		| "openExternal"
-		| "filterMarketplaceItems"
-		| "marketplaceButtonClicked"
-		| "installMarketplaceItem"
-		| "installMarketplaceItemWithParameters"
-		| "cancelMarketplaceInstall"
-		| "removeInstalledMarketplaceItem"
-		| "marketplaceInstallResult"
-		| "switchTab"
 	text?: string
-	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "account"
 	disabled?: boolean
-	dataUri?: string
 	askResponse?: ClineAskResponse
 	apiConfiguration?: ProviderSettings
 	images?: string[]
@@ -182,6 +171,7 @@ export interface WebviewMessage {
 	toolName?: string
 	alwaysAllow?: boolean
 	mode?: Mode
+	domain?: string
 	promptMode?: PromptMode
 	customPrompt?: PromptComponent
 	dataUrls?: string[]
@@ -198,11 +188,6 @@ export interface WebviewMessage {
 	hasSystemPromptOverride?: boolean
 	terminalOperation?: "continue" | "abort"
 	historyPreviewCollapsed?: boolean
-	filters?: { type?: string; search?: string; tags?: string[] }
-	url?: string // For openExternal
-	mpItem?: MarketplaceItem
-	mpInstallOptions?: InstallMarketplaceItemOptions
-	config?: Record<string, any> // Add config to the payload
 }
 
 export const checkoutDiffPayloadSchema = z.object({
@@ -246,4 +231,3 @@ export type WebViewMessagePayload =
 	| CheckpointRestorePayload
 	| IndexingStatusPayload
 	| IndexClearedPayload
-	| InstallMarketplaceItemWithParametersPayload

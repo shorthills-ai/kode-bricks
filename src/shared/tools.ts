@@ -47,9 +47,11 @@ export const toolParamNames = [
 	"result",
 	"diff",
 	"mode_slug",
+	"domain_slug",
 	"reason",
 	"line",
 	"mode",
+	"domain",
 	"message",
 	"cwd",
 	"follow_up",
@@ -63,7 +65,6 @@ export const toolParamNames = [
 	"start_line",
 	"end_line",
 	"query",
-	"args",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -184,6 +185,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	ask_followup_question: "ask questions",
 	attempt_completion: "complete tasks",
 	switch_mode: "switch modes",
+	switch_domain: "switch domains",
 	new_task: "create new task",
 	insert_content: "insert content",
 	search_and_replace: "search and replace",
@@ -216,6 +218,10 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	},
 	modes: {
 		tools: ["switch_mode", "new_task"],
+		alwaysAvailable: true,
+	},
+	domain: {
+		tools: ["switch_domain"],
 		alwaysAvailable: true,
 	},
 }
@@ -265,7 +271,7 @@ export interface DiffStrategy {
 	/**
 	 * Apply a diff to the original content
 	 * @param originalContent The original file content
-	 * @param diffContent The diff content in the strategy's format (string for legacy, DiffItem[] for new)
+	 * @param diffContent The diff content in the strategy's format
 	 * @param startLine Optional line number where the search block starts. If not provided, searches the entire file.
 	 * @param endLine Optional line number where the search block ends. If not provided, searches the entire file.
 	 * @returns A DiffResult object containing either the successful result or error details

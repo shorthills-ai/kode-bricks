@@ -59,6 +59,7 @@ export interface ApiHandler {
 }
 
 export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
+	console.debug("API Configuration:", configuration)
 	const { apiProvider, ...options } = configuration
 
 	switch (apiProvider) {

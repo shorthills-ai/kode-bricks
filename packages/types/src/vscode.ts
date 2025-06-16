@@ -48,9 +48,10 @@ export const commandIds = [
 	"newTask",
 
 	"setCustomStoragePath",
-
 	"focusInput",
 	"acceptInput",
+
+	"codeIndex.startIndexing",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

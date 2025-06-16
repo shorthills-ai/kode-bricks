@@ -185,13 +185,16 @@ export async function addCustomInstructions(
 	globalCustomInstructions: string,
 	cwd: string,
 	mode: string,
+	domain: string,
 	options: { language?: string; rooIgnoreInstructions?: string } = {},
 ): Promise<string> {
 	const sections = []
 
 	// Load mode-specific rules if mode is provided
 	let modeRuleContent = ""
+	let domainRuleContent = ""
 	let usedRuleFile = ""
+	let usedDomainRuleFile = ""
 
 	if (mode) {
 		// Check for .roo/rules-${mode}/ directory
@@ -215,6 +218,33 @@ export async function addCustomInstructions(
 				modeRuleContent = await safeReadFile(path.join(cwd, clineModeRuleFile))
 				if (modeRuleContent) {
 					usedRuleFile = clineModeRuleFile
+				}
+			}
+		}
+	}
+
+	if (domain) {
+		// Check for .roo/rules-${domain}/ directory
+		const domainRulesDir = path.join(cwd, ".roo", `rules-${domain}`)
+		if (await directoryExists(domainRulesDir)) {
+			const files = await readTextFilesFromDirectory(domainRulesDir)
+			if (files.length > 0) {
+				domainRuleContent = formatDirectoryContent(domainRulesDir, files)
+				usedDomainRuleFile = domainRulesDir
+			}
+		}
+
+		// If no directory exists, fall back to existing behavior
+		if (!domainRuleContent) {
+			const rooDomainRuleFile = `.roorules-${domain}`
+			domainRuleContent = await safeReadFile(path.join(cwd, rooDomainRuleFile))
+			if (domainRuleContent) {
+				usedDomainRuleFile = rooDomainRuleFile
+			} else {
+				const clineDomainRuleFile = `.clinerules-${domain}`
+				domainRuleContent = await safeReadFile(path.join(cwd, clineDomainRuleFile))
+				if (domainRuleContent) {
+					usedDomainRuleFile = clineDomainRuleFile
 				}
 			}
 		}
@@ -247,6 +277,15 @@ export async function addCustomInstructions(
 			rules.push(modeRuleContent.trim())
 		} else {
 			rules.push(`# Rules from ${usedRuleFile}:\n${modeRuleContent}`)
+		}
+	}
+
+	// Add domain-specific rules if they exist
+	if (domainRuleContent && domainRuleContent.trim()) {
+		if (usedDomainRuleFile.includes(path.join(".roo", `rules-${domain}`))) {
+			rules.push(domainRuleContent.trim())
+		} else {
+			rules.push(`# Rules from ${usedDomainRuleFile}:\n${domainRuleContent}`)
 		}
 	}
 

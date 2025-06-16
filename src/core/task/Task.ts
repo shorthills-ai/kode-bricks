@@ -37,7 +37,9 @@ import { ClineApiReqCancelReason, ClineApiReqInfo } from "../../shared/Extension
 import { getApiMetrics } from "../../shared/getApiMetrics"
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug } from "../../shared/modes"
+import { defaultDomainSlug } from "../../shared/domains"
 import { DiffStrategy } from "../../shared/tools"
+
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 
 // services
@@ -85,6 +87,9 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
+import { DomainVectorRetriever, SupportedDomain } from "../../services/code-index/domain-vector-retriever"
+import { CodeIndexOllamaEmbedder } from "../../services/code-index/embedders/ollama"
+import { CodeIndexManager } from "../../services/code-index/manager"
 
 export type ClineEvents = {
 	message: [{ action: "created" | "updated"; message: ClineMessage }]
@@ -135,6 +140,7 @@ export class Task extends EventEmitter<ClineEvents> {
 	isInitialized = false
 	isPaused: boolean = false
 	pausedModeSlug: string = defaultModeSlug
+	pausedDomainSlug: string = defaultDomainSlug
 	private pauseInterval: NodeJS.Timeout | undefined
 
 	// API
@@ -193,6 +199,7 @@ export class Task extends EventEmitter<ClineEvents> {
 	didRejectTool = false
 	didAlreadyUseTool = false
 	didCompleteReadingStream = false
+	private domainVectorRetriever: DomainVectorRetriever | null = null
 
 	constructor({
 		provider,
@@ -272,7 +279,6 @@ export class Task extends EventEmitter<ClineEvents> {
 				}
 			})
 		}
-
 		this.toolRepetitionDetector = new ToolRepetitionDetector(this.consecutiveMistakeLimit)
 
 		onCreated?.(this)
@@ -1174,6 +1180,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			await this.waitForResume()
 			provider.log(`[subtasks] resumed ${this.taskId}.${this.instanceId}`)
 			const currentMode = (await provider.getState())?.mode ?? defaultModeSlug
+			const currentDomain = (await provider.getState())?.domain ?? defaultDomainSlug
 
 			if (currentMode !== this.pausedModeSlug) {
 				// The mode has changed, we need to switch back to the paused mode.
@@ -1188,6 +1195,9 @@ export class Task extends EventEmitter<ClineEvents> {
 			}
 		}
 
+		// Inject domain context if applicable
+		const userContentWithDomainContext = await this.maybeInjectDomainContext(userContent)
+
 		// Getting verbose details is an expensive operation, it uses ripgrep to
 		// top-down build file structure of project which for large projects can
 		// take a few seconds. For the best UX we show a placeholder api_req_started
@@ -1196,14 +1206,15 @@ export class Task extends EventEmitter<ClineEvents> {
 			"api_req_started",
 			JSON.stringify({
 				request:
-					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") + "\n\nLoading...",
+					userContentWithDomainContext.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") +
+					"\n\nLoading...",
 			}),
 		)
 
 		const { showRooIgnoredFiles = true } = (await this.providerRef.deref()?.getState()) ?? {}
 
 		const parsedUserContent = await processUserContentMentions({
-			userContent,
+			userContent: userContentWithDomainContext,
 			cwd: this.cwd,
 			urlContentFetcher: this.urlContentFetcher,
 			fileContextTracker: this.fileContextTracker,
@@ -1580,6 +1591,7 @@ export class Task extends EventEmitter<ClineEvents> {
 		const {
 			browserViewportSize,
 			mode,
+			domain,
 			customModes,
 			customModePrompts,
 			customInstructions,
@@ -1606,6 +1618,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				this.diffStrategy,
 				browserViewportSize,
 				mode,
+				domain,
 				customModePrompts,
 				customModes,
 				customInstructions,
@@ -1896,5 +1909,65 @@ export class Task extends EventEmitter<ClineEvents> {
 
 	public get cwd() {
 		return this.workspacePath
+	}
+
+	// --- Domain context pipeline integration ---
+	private isTextBlock(block: Anthropic.Messages.ContentBlockParam): block is Anthropic.TextBlockParam {
+		return typeof block === "object" && block !== null && "text" in block && typeof (block as any).text === "string"
+	}
+
+	private async maybeInjectDomainContext(
+		userContent: Anthropic.Messages.ContentBlockParam[],
+	): Promise<Anthropic.Messages.ContentBlockParam[]> {
+		// Get the selected domain from the provider state (like 'mode')
+		const provider = this.providerRef.deref()
+		if (!provider) {
+			console.debug("[DomainContext] Provider not available, skipping domain context injection.")
+			return userContent
+		}
+		const state = await provider.getState()
+		const selectedDomain = state?.domain as SupportedDomain | undefined
+		if (!selectedDomain) {
+			console.debug(
+				`[DomainContext] No supported domain selected (got: ${selectedDomain}), skipping domain context injection.`,
+			)
+			return userContent
+		}
+		console.debug(`[DomainContext] Domain context pipeline triggered for domain: ${selectedDomain}`)
+		// Get embedder config from CodeIndexManager
+		// @ts-expect-error: accessing private _configManager for prototype/demo
+		const codeIndexManager = CodeIndexManager.getInstance()
+		// @ts-expect-error: accessing private _configManager for prototype/demo
+		const configManager = codeIndexManager?._configManager
+		const ollamaOptions =
+			configManager && configManager["ollamaOptions"]
+				? configManager["ollamaOptions"]
+				: { ollamaBaseUrl: "http://localhost:11434" }
+		const modelId = configManager && configManager["modelId"] ? configManager["modelId"] : "nomic-embed-text:latest"
+		const embedder = new CodeIndexOllamaEmbedder({ ...ollamaOptions, ollamaModelId: modelId })
+		const retriever = new DomainVectorRetriever(embedder)
+		// Extract user prompt text
+		const userPrompt = userContent.map((block) => (this.isTextBlock(block) ? block.text : "")).join("\n")
+		console.debug(`[DomainContext] Embedding user prompt:`, userPrompt)
+		try {
+			const topChunks = await retriever.getTopChunksForQuery(userPrompt, selectedDomain, 5)
+			console.debug(
+				`[DomainContext] Retrieved top ${topChunks.length} chunks for domain '${selectedDomain}':`,
+				topChunks,
+			)
+			if (topChunks.length > 0) {
+				const contextBlock: Anthropic.Messages.TextBlockParam = {
+					type: "text",
+					text: `[Domain Context]\n${topChunks.map((c) => c.text).join("\n---\n")}`,
+				}
+				console.debug(`[DomainContext] Injecting domain context block before user prompt.`)
+				return [contextBlock, ...userContent]
+			} else {
+				console.debug(`[DomainContext] No relevant chunks found for domain '${selectedDomain}'.`)
+			}
+		} catch (err) {
+			console.debug(`[DomainContext] Error in domain context pipeline:`, err)
+		}
+		return userContent
 	}
 }

@@ -1,11 +1,13 @@
 import fs from "fs/promises"
 import path from "path"
 import { Mode } from "../../../shared/modes"
+import { Domain } from "../../../shared/domains"
 import { fileExistsAtPath } from "../../../utils/fs"
 
 export type PromptVariables = {
 	workspace?: string
 	mode?: string
+	domain?: string
 	language?: string
 	shell?: string
 	operatingSystem?: string
@@ -28,11 +30,13 @@ function interpolatePromptContent(content: string, variables: PromptVariables): 
 /**
  * Safely reads a file, returning an empty string if the file doesn't exist
  */
-async function safeReadFile(filePath: string): Promise<string> {
+async function safeReadFile(filePath: string, domainFilePath: string): Promise<string> {
 	try {
 		const content = await fs.readFile(filePath, "utf-8")
+		const domainContent = await fs.readFile(domainFilePath, "utf-8")
 		// When reading with "utf-8" encoding, content should be a string
-		return content.trim()
+		const combinedContent = content + "\n" + domainContent
+		return combinedContent.trim()
 	} catch (err) {
 		const errorCode = (err as NodeJS.ErrnoException).code
 		if (!errorCode || !["ENOENT", "EISDIR"].includes(errorCode)) {
@@ -53,9 +57,15 @@ export function getSystemPromptFilePath(cwd: string, mode: Mode): string {
  * Loads custom system prompt from a file at .roo/system-prompt-[mode slug]
  * If the file doesn't exist, returns an empty string
  */
-export async function loadSystemPromptFile(cwd: string, mode: Mode, variables: PromptVariables): Promise<string> {
+export async function loadSystemPromptFile(
+	cwd: string,
+	mode: Mode,
+	domain: Domain,
+	variables: PromptVariables,
+): Promise<string> {
 	const filePath = getSystemPromptFilePath(cwd, mode)
-	const rawContent = await safeReadFile(filePath)
+	const domainFilePath = path.join(cwd, ".roo", `system-prompt-${domain}`)
+	const rawContent = await safeReadFile(filePath, domainFilePath)
 	if (!rawContent) {
 		return ""
 	}

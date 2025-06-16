@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { type Keys } from "./type-fu.js"
+import { type Keys, keysOf } from "./type-fu.js"
 import {
 	type ProviderSettings,
 	PROVIDER_SETTINGS_KEYS,
@@ -97,6 +97,7 @@ export const globalSettingsSchema = z.object({
 	enableMcpServerCreation: z.boolean().optional(),
 
 	mode: z.string().optional(),
+	domain: z.string().optional(),
 	modeApiConfigs: z.record(z.string(), z.string()).optional(),
 	customModes: z.array(modeConfigSchema).optional(),
 	customModePrompts: customModePromptsSchema.optional(),
@@ -107,7 +108,91 @@ export const globalSettingsSchema = z.object({
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>
 
-export const GLOBAL_SETTINGS_KEYS = globalSettingsSchema.keyof().options
+export const GLOBAL_SETTINGS_KEYS = keysOf<GlobalSettings>()([
+	"currentApiConfigName",
+	"listApiConfigMeta",
+	"pinnedApiConfigs",
+
+	"lastShownAnnouncementId",
+	"customInstructions",
+	"taskHistory",
+
+	"condensingApiConfigId",
+	"customCondensingPrompt",
+
+	"autoApprovalEnabled",
+	"alwaysAllowReadOnly",
+	"alwaysAllowReadOnlyOutsideWorkspace",
+	"alwaysAllowWrite",
+	"alwaysAllowWriteOutsideWorkspace",
+	"alwaysAllowWriteProtected",
+	"writeDelayMs",
+	"alwaysAllowBrowser",
+	"alwaysApproveResubmit",
+	"requestDelaySeconds",
+	"alwaysAllowMcp",
+	"alwaysAllowModeSwitch",
+	"alwaysAllowSubtasks",
+	"alwaysAllowExecute",
+	"allowedCommands",
+	"allowedMaxRequests",
+	"autoCondenseContext",
+	"autoCondenseContextPercent",
+	"maxConcurrentFileReads",
+
+	"browserToolEnabled",
+	"browserViewportSize",
+	"screenshotQuality",
+	"remoteBrowserEnabled",
+	"remoteBrowserHost",
+	"cachedChromeHostUrl",
+
+	"enableCheckpoints",
+
+	"ttsEnabled",
+	"ttsSpeed",
+	"soundEnabled",
+	"soundVolume",
+
+	"maxOpenTabsContext",
+	"maxWorkspaceFiles",
+	"showRooIgnoredFiles",
+	"maxReadFileLine",
+
+	"terminalOutputLineLimit",
+	"terminalShellIntegrationTimeout",
+	"terminalShellIntegrationDisabled",
+	"terminalCommandDelay",
+	"terminalPowershellCounter",
+	"terminalZshClearEolMark",
+	"terminalZshOhMy",
+	"terminalZshP10k",
+	"terminalZdotdir",
+	"terminalCompressProgressBar",
+
+	"rateLimitSeconds",
+	"diffEnabled",
+	"fuzzyMatchThreshold",
+	"experiments",
+
+	"codebaseIndexModels",
+	"codebaseIndexConfig",
+
+	"language",
+
+	"telemetrySetting",
+	"mcpEnabled",
+	"enableMcpServerCreation",
+
+	"mode",
+	"domain",
+	"modeApiConfigs",
+	"customModes",
+	"customModePrompts",
+	"customSupportPrompts",
+	"enhancementApiConfigId",
+	"historyPreviewCollapsed",
+])
 
 /**
  * RooCodeSettings
@@ -120,7 +205,32 @@ export type RooCodeSettings = GlobalSettings & ProviderSettings
 /**
  * SecretState
  */
-export const SECRET_STATE_KEYS = [
+
+export type SecretState = Pick<
+	ProviderSettings,
+	| "apiKey"
+	| "glamaApiKey"
+	| "openRouterApiKey"
+	| "awsAccessKey"
+	| "awsSecretKey"
+	| "awsSessionToken"
+	| "openAiApiKey"
+	| "geminiApiKey"
+	| "openAiNativeApiKey"
+	| "deepSeekApiKey"
+	| "mistralApiKey"
+	| "unboundApiKey"
+	| "requestyApiKey"
+	| "xaiApiKey"
+	| "groqApiKey"
+	| "chutesApiKey"
+	| "litellmApiKey"
+	| "codeIndexOpenAiKey"
+	| "codebaseIndexVectorStoreApiKey"
+	| "codebaseIndexOpenAiCompatibleApiKey"
+>
+
+export const SECRET_STATE_KEYS = keysOf<SecretState>()([
 	"apiKey",
 	"glamaApiKey",
 	"openRouterApiKey",
@@ -139,10 +249,9 @@ export const SECRET_STATE_KEYS = [
 	"chutesApiKey",
 	"litellmApiKey",
 	"codeIndexOpenAiKey",
-	"codeIndexQdrantApiKey",
+	"codebaseIndexVectorStoreApiKey",
 	"codebaseIndexOpenAiCompatibleApiKey",
-] as const satisfies readonly (keyof ProviderSettings)[]
-export type SecretState = Pick<ProviderSettings, (typeof SECRET_STATE_KEYS)[number]>
+])
 
 export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 	SECRET_STATE_KEYS.includes(key as Keys<SecretState>)
@@ -227,6 +336,7 @@ export const EVALS_SETTINGS: RooCodeSettings = {
 	mcpEnabled: false,
 
 	mode: "code",
+	domain: "None",
 
 	customModes: [],
 }
