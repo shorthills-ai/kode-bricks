@@ -2,6 +2,7 @@ import path from "path"
 import { readFile } from "fs/promises"
 import { Mode } from "../../../../shared/modes" // Adjusted import path
 import { loadSystemPromptFile, PromptVariables } from "../custom-system-prompt"
+import { Domain } from "../../../../shared/domains"
 
 // Mock the fs/promises module
 jest.mock("fs/promises")
@@ -16,6 +17,7 @@ describe("loadSystemPromptFile", () => {
 	}
 	const mockCwd = "/mock/cwd"
 	const mockMode: Mode = "test" // Use Mode type, e.g., 'test'
+	const mockDomain: Domain = "test-domain" // Added mockDomain for completeness
 	// Corrected expected file path format
 	const expectedFilePath = path.join(mockCwd, ".roo", `system-prompt-${mockMode}`)
 
@@ -30,7 +32,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockRejectedValue(error)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -43,7 +45,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockRejectedValue(expectedError)
 
 		// Assert that the promise rejects with the specific error
-		await expect(loadSystemPromptFile(mockCwd, mockMode, mockVariables)).rejects.toThrow(expectedError)
+		await expect(loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)).rejects.toThrow(expectedError)
 
 		// Verify readFile was still called correctly
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -54,7 +56,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue("")
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -67,7 +69,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue(template)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("Workspace is: /path/to/workspace")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -80,7 +82,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue(template)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("Path: /path/to/workspace//path/to/workspace")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -93,7 +95,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue(template)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		// Unused variables should remain untouched
 		expect(result).toBe("Workspace: /path/to/workspace, Unused: {{unusedVar}}, Another: {{another}}")
@@ -107,7 +109,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue(template)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("Workspace: /path/to/workspace, Missing: {{missingPlaceholder}}")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)
@@ -122,7 +124,7 @@ describe("loadSystemPromptFile", () => {
 		mockedReadFile.mockResolvedValue(template)
 
 		// Added mockMode argument
-		const result = await loadSystemPromptFile(mockCwd, mockMode, mockVariables)
+		const result = await loadSystemPromptFile(mockCwd, mockMode, mockDomain, mockVariables)
 
 		expect(result).toBe("This is a static prompt.")
 		expect(mockedReadFile).toHaveBeenCalledTimes(1)

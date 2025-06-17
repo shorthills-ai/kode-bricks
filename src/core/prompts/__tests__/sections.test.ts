@@ -9,6 +9,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/test/path",
 			"test-mode",
+			"test-domain",
 			{ language: "fr" },
 		)
 
@@ -22,6 +23,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/test/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).not.toContain("Language Preference:")

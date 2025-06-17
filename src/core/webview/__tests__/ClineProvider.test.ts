@@ -15,6 +15,7 @@ import { ContextProxy } from "../../config/ContextProxy"
 import { Task, TaskOptions } from "../../task/Task"
 
 import { ClineProvider } from "../ClineProvider"
+import { defaultDomainSlug } from "../../../shared/domains"
 
 // Mock setup must come before imports
 jest.mock("../../prompts/sections/custom-instructions")
@@ -396,7 +397,9 @@ describe("ClineProvider", () => {
 			alwaysAllowWrite: false,
 			codebaseIndexConfig: {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "",
+				codebaseIndexVectorStoreApiKey: "",
+				codebaseIndexVectorStoreType: "faiss",
+				codebaseIndexVectorStoreUrl: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
@@ -417,6 +420,7 @@ describe("ClineProvider", () => {
 			enableMcpServerCreation: false,
 			requestDelaySeconds: 5,
 			mode: defaultModeSlug,
+			domain: defaultDomainSlug,
 			customModes: [],
 			experiments: experimentDefault,
 			maxOpenTabsContext: 20,

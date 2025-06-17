@@ -194,6 +194,7 @@ describe("mergeExtensionState", () => {
 			writeDelayMs: 1000,
 			requestDelaySeconds: 5,
 			mode: "default",
+			domain: "default",
 			experiments: {} as Record<ExperimentId, boolean>,
 			customModes: [],
 			maxOpenTabsContext: 20,
@@ -222,10 +223,11 @@ describe("mergeExtensionState", () => {
 			apiConfiguration: { modelMaxThinkingTokens: 456, modelTemperature: 0.3 },
 			experiments: {
 				powerSteering: true,
-				marketplace: false,
+				autoCondenseContext: true,
 				concurrentFileReads: true,
 				disableCompletionCommand: false,
-				multiFileApplyDiff: true,
+				marketplace: false,
+				multiFileApplyDiff: false,
 			} as Record<ExperimentId, boolean>,
 		}
 
@@ -238,10 +240,9 @@ describe("mergeExtensionState", () => {
 
 		expect(result.experiments).toEqual({
 			powerSteering: true,
-			marketplace: false,
+			autoCondenseContext: true,
 			concurrentFileReads: true,
 			disableCompletionCommand: false,
-			multiFileApplyDiff: true,
 		})
 	})
 })
