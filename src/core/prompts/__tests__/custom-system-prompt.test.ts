@@ -3,6 +3,7 @@ import { defaultModeSlug, modes } from "../../../shared/modes"
 import * as vscode from "vscode"
 import * as fs from "fs/promises"
 import { toPosix } from "./utils"
+import { defaultDomainSlug } from "../../../shared/domains"
 
 // Mock the fs/promises module
 jest.mock("fs/promises", () => ({
@@ -70,6 +71,7 @@ describe("File-Based Custom System Prompt", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
+			defaultDomainSlug,
 			customModePrompts, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
@@ -107,6 +109,7 @@ describe("File-Based Custom System Prompt", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
+			defaultDomainSlug,
 			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
@@ -153,6 +156,7 @@ describe("File-Based Custom System Prompt", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
+			defaultDomainSlug,
 			customModePrompts, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions

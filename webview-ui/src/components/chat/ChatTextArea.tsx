@@ -6,6 +6,7 @@ import { mentionRegex, mentionRegexGlobal, unescapeSpaces } from "@roo/context-m
 import { WebviewMessage } from "@roo/WebviewMessage"
 import { Mode, getAllModes } from "@roo/modes"
 import { ExtensionMessage } from "@roo/ExtensionMessage"
+import { getAllDomains } from "@roo/domains"
 
 import { vscode } from "@/utils/vscode"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -77,6 +78,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			cwd,
 			pinnedApiConfigs,
 			togglePinnedApiConfig,
+			domain: currentDomain,
 			taskHistory,
 			clineMessages,
 			codebaseIndexConfig,
@@ -777,6 +779,34 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const placeholderBottomText = `\n(${t("chat:addContext")}${shouldDisableImages ? `, ${t("chat:dragFiles")}` : `, ${t("chat:dragFilesImages")}`})`
 
+		// Domain dropdown options
+		const domainOptions = useMemo(
+			() => [
+				...getAllDomains().map((domain) => ({
+					value: domain.slug,
+					label: domain.name,
+					type: DropdownOptionType.ITEM,
+				})),
+				{
+					value: "sep-1",
+					label: t("chat:separator"),
+					type: DropdownOptionType.SEPARATOR,
+				},
+				{
+					value: "domainsButtonClicked",
+					label: t("chat:editDomains"),
+					type: DropdownOptionType.ACTION,
+				},
+			],
+			[t],
+		)
+
+		// Get the selected domain config for info display
+		// const selectedDomainConfig = useMemo(
+		// 	() => getAllDomains().find((d) => d.slug === currentDomain),
+		// 	[currentDomain],
+		// )
+
 		return (
 			<div
 				className={cn(
@@ -996,6 +1026,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 				<div className={cn("flex", "justify-between", "items-center", "mt-auto", "pt-0.5")}>
 					<div className={cn("flex", "items-center", "gap-1", "min-w-0")}>
+						<div className="shrink-0">
+							{/* Domain Dropdown */}
+							<SelectDropdown
+								value={currentDomain}
+								title={t("chat:selectDomain")}
+								options={domainOptions}
+								onChange={(value) => {
+									vscode.postMessage({ type: "domain", text: value })
+								}}
+								triggerClassName="w-full"
+							/>
+						</div>
 						<div className="shrink-0">
 							<SelectDropdown
 								value={mode}

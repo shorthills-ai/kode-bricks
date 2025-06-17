@@ -39,7 +39,8 @@ import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ExtensionMessage } from "../../shared/ExtensionMessage"
 import { Mode, defaultModeSlug } from "../../shared/modes"
-import { experimentDefault, experiments, EXPERIMENT_IDS } from "../../shared/experiments"
+import { Domain, defaultDomainSlug } from "../../shared/domains"
+import { experimentDefault } from "../../shared/experiments"
 import { formatLanguage } from "../../shared/language"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { downloadTask } from "../../integrations/misc/export-markdown"
@@ -167,6 +168,10 @@ export class ClineProvider
 
 		if (!state || typeof state.mode !== "string") {
 			throw new Error(t("common:errors.retrieve_current_mode"))
+		}
+
+		if (!state.domain || typeof state.domain !== "string") {
+			throw new Error(t("common:errors.retrieve_current_domain"))
 		}
 	}
 
@@ -828,6 +833,21 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	public async handleDomainSwitch(newDomain: Domain) {
+		console.debug("[Domain] handleDomainSwitch called with:", newDomain)
+		const cline = this.getCurrentCline()
+
+		if (cline) {
+			console.debug("[Domain] Current cline found. taskId:", cline.taskId)
+			TelemetryService.instance.captureDomainSwitch(cline.taskId, newDomain)
+			cline.emit("taskModeSwitched", cline.taskId, newDomain)
+		}
+
+		await this.updateGlobalState("domain", newDomain)
+		console.debug("[Domain] Global state updated with new domain:", newDomain)
+		await this.postStateToWebview()
+		console.debug("[Domain] postStateToWebview called after domain switch.")
+	}
 	// Provider Profile Management
 
 	getProviderProfileEntries(): ProviderSettingsEntry[] {
@@ -1316,6 +1336,7 @@ export class ClineProvider
 			listApiConfigMeta,
 			pinnedApiConfigs,
 			mode,
+			domain,
 			customModePrompts,
 			customSupportPrompts,
 			enhancementApiConfigId,
@@ -1420,6 +1441,7 @@ export class ClineProvider
 			listApiConfigMeta: listApiConfigMeta ?? [],
 			pinnedApiConfigs: pinnedApiConfigs ?? {},
 			mode: mode ?? defaultModeSlug,
+			domain: domain ?? defaultDomainSlug,
 			customModePrompts: customModePrompts ?? {},
 			customSupportPrompts: customSupportPrompts ?? {},
 			enhancementApiConfigId,
@@ -1452,7 +1474,9 @@ export class ClineProvider
 			codebaseIndexModels: codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: codebaseIndexConfig ?? {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreApiKey: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
@@ -1567,6 +1591,7 @@ export class ClineProvider
 			terminalZdotdir: stateValues.terminalZdotdir ?? false,
 			terminalCompressProgressBar: stateValues.terminalCompressProgressBar ?? true,
 			mode: stateValues.mode ?? defaultModeSlug,
+			domain: stateValues.domain ?? defaultModeSlug,
 			language: stateValues.language ?? formatLanguage(vscode.env.language),
 			mcpEnabled: stateValues.mcpEnabled ?? true,
 			enableMcpServerCreation: stateValues.enableMcpServerCreation ?? true,
@@ -1601,7 +1626,9 @@ export class ClineProvider
 			codebaseIndexModels: stateValues.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
 			codebaseIndexConfig: stateValues.codebaseIndexConfig ?? {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreApiKey: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",
@@ -1706,7 +1733,7 @@ export class ClineProvider
 	 * like the current mode, API provider, etc.
 	 */
 	public async getTelemetryProperties(): Promise<TelemetryProperties> {
-		const { mode, apiConfiguration, language } = await this.getState()
+		const { mode, domain, apiConfiguration, language } = await this.getState()
 		const task = this.getCurrentCline()
 
 		const packageJSON = this.context.extension?.packageJSON
@@ -1719,6 +1746,7 @@ export class ClineProvider
 			editorName: vscode.env.appName,
 			language,
 			mode,
+			domain,
 			apiProvider: apiConfiguration?.apiProvider,
 			modelId: task?.api?.getModel().id,
 			diffStrategy: task?.diffStrategy?.getName(),

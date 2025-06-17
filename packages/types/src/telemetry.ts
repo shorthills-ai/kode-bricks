@@ -25,6 +25,7 @@ export enum TelemetryEventName {
 	TASK_CONVERSATION_MESSAGE = "Conversation Message",
 	LLM_COMPLETION = "LLM Completion",
 	MODE_SWITCH = "Mode Switched",
+	DOMAIN_SWITCH = "Domain Switched",
 	TOOL_USED = "Tool Used",
 
 	CHECKPOINT_CREATED = "Checkpoint Created",
@@ -62,6 +63,7 @@ export const appPropertiesSchema = z.object({
 	editorName: z.string(),
 	language: z.string(),
 	mode: z.string(),
+	domain: z.string(),
 })
 
 export const taskPropertiesSchema = z.object({

@@ -12,8 +12,9 @@ export interface CodeIndexConfig {
 	openAiOptions?: ApiHandlerOptions
 	ollamaOptions?: ApiHandlerOptions
 	openAiCompatibleOptions?: { baseUrl: string; apiKey: string; modelDimension?: number }
-	qdrantUrl?: string
-	qdrantApiKey?: string
+	vectorStoreType?: "qdrant" | "faiss" | "chroma"
+	vectorStoreUrl?: string
+	vectorStoreApiKey?: string
 	searchMinScore?: number
 }
 
@@ -30,6 +31,7 @@ export type PreviousConfigSnapshot = {
 	openAiCompatibleBaseUrl?: string
 	openAiCompatibleApiKey?: string
 	openAiCompatibleModelDimension?: number
-	qdrantUrl?: string
-	qdrantApiKey?: string
+	vectorStoreType?: string
+	vectorStoreUrl?: string
+	vectorStoreApiKey?: string
 }

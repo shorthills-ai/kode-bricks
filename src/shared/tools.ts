@@ -47,9 +47,11 @@ export const toolParamNames = [
 	"result",
 	"diff",
 	"mode_slug",
+	"domain_slug",
 	"reason",
 	"line",
 	"mode",
+	"domain",
 	"message",
 	"cwd",
 	"follow_up",
@@ -184,6 +186,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	ask_followup_question: "ask questions",
 	attempt_completion: "complete tasks",
 	switch_mode: "switch modes",
+	switch_domain: "switch domains",
 	new_task: "create new task",
 	insert_content: "insert content",
 	search_and_replace: "search and replace",
@@ -216,6 +219,10 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	},
 	modes: {
 		tools: ["switch_mode", "new_task"],
+		alwaysAvailable: true,
+	},
+	domain: {
+		tools: ["switch_domain"],
 		alwaysAvailable: true,
 	},
 }

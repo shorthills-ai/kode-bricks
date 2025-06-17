@@ -311,6 +311,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 			{ language: "es" },
 		)
 
@@ -328,7 +329,7 @@ describe("addCustomInstructions", () => {
 
 		readFileMock.mockRejectedValue({ code: "ENOENT" })
 
-		const result = await addCustomInstructions("", "", "/fake/path", "", {})
+		const result = await addCustomInstructions("", "", "/fake/path", "", "", {})
 		expect(result).toBe("")
 	})
 
@@ -343,6 +344,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).toContain("Global Instructions:")
@@ -361,6 +363,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 			{ language: "xyz" }, // Unknown language code
 		)
 
@@ -378,7 +381,7 @@ describe("addCustomInstructions", () => {
 		readFileMock.mockRejectedValue(error)
 
 		await expect(async () => {
-			await addCustomInstructions("", "", "/fake/path", "test-mode")
+			await addCustomInstructions("", "", "/fake/path", "test-mode", "test-domain")
 		}).rejects.toThrow()
 	})
 
@@ -398,6 +401,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).toContain("Global Instructions:\nglobal instructions")
@@ -449,6 +453,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 			{ language: "es" },
 		)
 
@@ -482,6 +487,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).toContain("Rules from .roorules-test-mode:\nmode specific rules from file")
@@ -507,6 +513,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).toContain("Rules from .clinerules-test-mode:\nmode specific rules from cline file")
@@ -558,6 +565,7 @@ describe("addCustomInstructions", () => {
 			"global instructions",
 			"/fake/path",
 			"test-mode",
+			"test-domain",
 		)
 
 		expect(result).toContain("# Rules from /fake/path/.roo/rules-test-mode")

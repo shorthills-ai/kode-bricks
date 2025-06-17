@@ -3,6 +3,7 @@ import delay from "delay"
 import { ToolUse, AskApproval, HandleError, PushToolResult, RemoveClosingTag } from "../../shared/tools"
 import { Task } from "../task/Task"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
+import { defaultDomainSlug, getDomainBySlug } from "../../shared/domains"
 import { formatResponse } from "../prompts/responses"
 
 export async function newTaskTool(
@@ -14,6 +15,7 @@ export async function newTaskTool(
 	removeClosingTag: RemoveClosingTag,
 ) {
 	const mode: string | undefined = block.params.mode
+	const domain: string | undefined = block.params.domain
 	const message: string | undefined = block.params.message
 
 	try {
@@ -21,6 +23,7 @@ export async function newTaskTool(
 			const partialMessage = JSON.stringify({
 				tool: "newTask",
 				mode: removeClosingTag("mode", mode),
+				domain: removeClosingTag("domain", domain),
 				message: removeClosingTag("message", message),
 			})
 
@@ -34,6 +37,13 @@ export async function newTaskTool(
 				return
 			}
 
+			if (!domain) {
+				cline.consecutiveMistakeCount++
+				cline.recordToolError("new_task")
+				pushToolResult(await cline.sayAndCreateMissingParamError("new_task", "domain"))
+				return
+			}
+
 			if (!message) {
 				cline.consecutiveMistakeCount++
 				cline.recordToolError("new_task")
@@ -42,9 +52,6 @@ export async function newTaskTool(
 			}
 
 			cline.consecutiveMistakeCount = 0
-			// Un-escape one level of backslashes before '@' for hierarchical subtasks
-// Un-escape one level: \\@ -> \@ (removes one backslash for hierarchical subtasks)
-			const unescapedMessage = message.replace(/\\\\@/g, "\\@")
 
 			// Verify the mode exists
 			const targetMode = getModeBySlug(mode, (await cline.providerRef.deref()?.getState())?.customModes)
@@ -57,6 +64,7 @@ export async function newTaskTool(
 			const toolMessage = JSON.stringify({
 				tool: "newTask",
 				mode: targetMode.name,
+				domain: getDomainBySlug(domain)?.name ?? domain,
 				content: message,
 			})
 
@@ -78,17 +86,21 @@ export async function newTaskTool(
 
 			// Preserve the current mode so we can resume with it later.
 			cline.pausedModeSlug = (await provider.getState()).mode ?? defaultModeSlug
+			cline.pausedDomainSlug = (await provider.getState()).domain ?? defaultDomainSlug
 
 			// Switch mode first, then create new task instance.
 			await provider.handleModeSwitch(mode)
+			await provider.handleDomainSwitch(domain)
 
 			// Delay to allow mode change to take effect before next tool is executed.
-			await delay(500)
+			await delay(1000)
 
-			const newCline = await provider.initClineWithTask(unescapedMessage, undefined, cline)
+			const newCline = await provider.initClineWithTask(message, undefined, cline)
 			cline.emit("taskSpawned", newCline.taskId)
 
-			pushToolResult(`Successfully created new task in ${targetMode.name} mode with message: ${unescapedMessage}`)
+			pushToolResult(
+				`Successfully created new task in ${targetMode.name} mode with message: ${message} and domain: ${domain}`,
+			)
 
 			// Set the isPaused flag to true so the parent
 			// task can wait for the sub-task to finish.

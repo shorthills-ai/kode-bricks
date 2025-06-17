@@ -16,8 +16,9 @@ export class CodeIndexConfigManager {
 	private openAiOptions?: ApiHandlerOptions
 	private ollamaOptions?: ApiHandlerOptions
 	private openAiCompatibleOptions?: { baseUrl: string; apiKey: string; modelDimension?: number }
-	private qdrantUrl?: string = "http://localhost:6333"
-	private qdrantApiKey?: string
+	private vectorStoreType?: "qdrant" | "faiss" | "chroma"
+	private vectorStoreUrl?: string
+	private vectorStoreApiKey?: string
 	private searchMinScore?: number
 
 	constructor(private readonly contextProxy: ContextProxy) {
@@ -33,7 +34,9 @@ export class CodeIndexConfigManager {
 		// Load configuration from storage
 		const codebaseIndexConfig = this.contextProxy?.getGlobalState("codebaseIndexConfig") ?? {
 			codebaseIndexEnabled: false,
-			codebaseIndexQdrantUrl: "http://localhost:6333",
+			codebaseIndexVectorStoreType: "qdrant",
+			codebaseIndexVectorStoreUrl: "http://localhost:6333",
+			codebaseIndexVectorStoreApiKey: "",
 			codebaseIndexSearchMinScore: 0.4,
 			codebaseIndexEmbedderProvider: "openai",
 			codebaseIndexEmbedderBaseUrl: "",
@@ -42,14 +45,23 @@ export class CodeIndexConfigManager {
 
 		const {
 			codebaseIndexEnabled,
-			codebaseIndexQdrantUrl,
+			codebaseIndexVectorStoreApiKey,
+			codebaseIndexVectorStoreType,
+			codebaseIndexVectorStoreUrl,
 			codebaseIndexEmbedderProvider,
 			codebaseIndexEmbedderBaseUrl,
 			codebaseIndexEmbedderModelId,
 		} = codebaseIndexConfig
 
 		const openAiKey = this.contextProxy?.getSecret("codeIndexOpenAiKey") ?? ""
-		const qdrantApiKey = this.contextProxy?.getSecret("codeIndexQdrantApiKey") ?? ""
+		const vectorStoreApiKey =
+			codebaseIndexVectorStoreApiKey ?? this.contextProxy?.getSecret("codebaseIndexVectorStoreApiKey") ?? ""
+		const vectorStoreUrl =
+			codebaseIndexVectorStoreUrl ?? this.contextProxy?.getGlobalState("codebaseIndexVectorStoreUrl") ?? ""
+		const vectorStoreType =
+			codebaseIndexVectorStoreType ??
+			this.contextProxy?.getGlobalState("codebaseIndexVectorStoreType") ??
+			"qdrant"
 		const openAiCompatibleBaseUrl = this.contextProxy?.getGlobalState("codebaseIndexOpenAiCompatibleBaseUrl") ?? ""
 		const openAiCompatibleApiKey = this.contextProxy?.getSecret("codebaseIndexOpenAiCompatibleApiKey") ?? ""
 		const openAiCompatibleModelDimension = this.contextProxy?.getGlobalState(
@@ -58,8 +70,12 @@ export class CodeIndexConfigManager {
 
 		// Update instance variables with configuration
 		this.isEnabled = codebaseIndexEnabled || false
-		this.qdrantUrl = codebaseIndexQdrantUrl
-		this.qdrantApiKey = qdrantApiKey ?? ""
+		this.vectorStoreType = vectorStoreType
+		this.vectorStoreUrl = vectorStoreUrl
+		this.vectorStoreApiKey = vectorStoreApiKey ?? ""
+		console.debug(`[CodeIndexConfigManager] Vector store type: ${this.vectorStoreType}`)
+		console.debug(`[CodeIndexConfigManager] Vector store URL: ${this.vectorStoreUrl}`)
+		console.debug(`[CodeIndexConfigManager] Vector store API key: ${this.vectorStoreApiKey}`)
 		this.openAiOptions = { openAiNativeApiKey: openAiKey }
 		this.searchMinScore = SEARCH_MIN_SCORE
 
@@ -101,8 +117,9 @@ export class CodeIndexConfigManager {
 			openAiOptions?: ApiHandlerOptions
 			ollamaOptions?: ApiHandlerOptions
 			openAiCompatibleOptions?: { baseUrl: string; apiKey: string }
-			qdrantUrl?: string
-			qdrantApiKey?: string
+			vectorStoreType?: "qdrant" | "faiss" | "chroma"
+			vectorStoreUrl?: string
+			vectorStoreApiKey?: string
 			searchMinScore?: number
 		}
 		requiresRestart: boolean
@@ -118,8 +135,9 @@ export class CodeIndexConfigManager {
 			openAiCompatibleBaseUrl: this.openAiCompatibleOptions?.baseUrl ?? "",
 			openAiCompatibleApiKey: this.openAiCompatibleOptions?.apiKey ?? "",
 			openAiCompatibleModelDimension: this.openAiCompatibleOptions?.modelDimension,
-			qdrantUrl: this.qdrantUrl ?? "",
-			qdrantApiKey: this.qdrantApiKey ?? "",
+			vectorStoreType: this.vectorStoreType ?? "qdrant",
+			vectorStoreUrl: this.vectorStoreUrl ?? "http://localhost:6333",
+			vectorStoreApiKey: this.vectorStoreApiKey ?? "",
 		}
 
 		// Load new configuration from storage and update instance variables
@@ -137,8 +155,9 @@ export class CodeIndexConfigManager {
 				openAiOptions: this.openAiOptions,
 				ollamaOptions: this.ollamaOptions,
 				openAiCompatibleOptions: this.openAiCompatibleOptions,
-				qdrantUrl: this.qdrantUrl,
-				qdrantApiKey: this.qdrantApiKey,
+				vectorStoreType: this.vectorStoreType,
+				vectorStoreUrl: this.vectorStoreUrl,
+				vectorStoreApiKey: this.vectorStoreApiKey,
 				searchMinScore: this.searchMinScore,
 			},
 			requiresRestart,
@@ -151,20 +170,23 @@ export class CodeIndexConfigManager {
 	public isConfigured(): boolean {
 		if (this.embedderProvider === "openai") {
 			const openAiKey = this.openAiOptions?.openAiNativeApiKey
-			const qdrantUrl = this.qdrantUrl
-			const isConfigured = !!(openAiKey && qdrantUrl)
+			const vectorStoreUrl = this.vectorStoreUrl
+			const vectorStoreType = this.vectorStoreType
+			const isConfigured = !!(openAiKey && vectorStoreType && vectorStoreUrl)
 			return isConfigured
 		} else if (this.embedderProvider === "ollama") {
 			// Ollama model ID has a default, so only base URL is strictly required for config
 			const ollamaBaseUrl = this.ollamaOptions?.ollamaBaseUrl
-			const qdrantUrl = this.qdrantUrl
-			const isConfigured = !!(ollamaBaseUrl && qdrantUrl)
+			const vectorStoreUrl = this.vectorStoreUrl
+			const vectorStoreType = this.vectorStoreType
+			const isConfigured = !!(ollamaBaseUrl && vectorStoreType && vectorStoreUrl)
 			return isConfigured
 		} else if (this.embedderProvider === "openai-compatible") {
 			const baseUrl = this.openAiCompatibleOptions?.baseUrl
 			const apiKey = this.openAiCompatibleOptions?.apiKey
-			const qdrantUrl = this.qdrantUrl
-			return !!(baseUrl && apiKey && qdrantUrl)
+			const vectorStoreUrl = this.vectorStoreUrl
+			const vectorStoreType = this.vectorStoreType
+			return !!(baseUrl && apiKey && vectorStoreType && vectorStoreUrl)
 		}
 		return false // Should not happen if embedderProvider is always set correctly
 	}
@@ -185,8 +207,9 @@ export class CodeIndexConfigManager {
 		const prevOpenAiCompatibleBaseUrl = prev?.openAiCompatibleBaseUrl ?? ""
 		const prevOpenAiCompatibleApiKey = prev?.openAiCompatibleApiKey ?? ""
 		const prevOpenAiCompatibleModelDimension = prev?.openAiCompatibleModelDimension
-		const prevQdrantUrl = prev?.qdrantUrl ?? ""
-		const prevQdrantApiKey = prev?.qdrantApiKey ?? ""
+		const prevVectorStoreType = prev?.vectorStoreType ?? "qdrant"
+		const prevVectorStoreUrl = prev?.vectorStoreUrl ?? "http://localhost:6333"
+		const prevVectorStoreApiKey = prev?.vectorStoreApiKey ?? ""
 
 		// 1. Transition from disabled/unconfigured to enabled+configured
 		if ((!prevEnabled || !prevConfigured) && this.isEnabled && nowConfigured) {
@@ -243,10 +266,14 @@ export class CodeIndexConfigManager {
 			}
 
 			// Qdrant configuration changes
-			const currentQdrantUrl = this.qdrantUrl ?? ""
-			const currentQdrantApiKey = this.qdrantApiKey ?? ""
-
-			if (prevQdrantUrl !== currentQdrantUrl || prevQdrantApiKey !== currentQdrantApiKey) {
+			const currentVectorStoreType = this.vectorStoreType ?? "qdrant"
+			const currentVectorStoreUrl = this.vectorStoreUrl ?? "http://localhost:6333"
+			const currentVectorStoreApiKey = this.vectorStoreApiKey ?? ""
+			if (
+				prevVectorStoreUrl !== currentVectorStoreUrl ||
+				prevVectorStoreApiKey !== currentVectorStoreApiKey ||
+				prevVectorStoreType !== currentVectorStoreType
+			) {
 				return true
 			}
 		}
@@ -292,8 +319,9 @@ export class CodeIndexConfigManager {
 			openAiOptions: this.openAiOptions,
 			ollamaOptions: this.ollamaOptions,
 			openAiCompatibleOptions: this.openAiCompatibleOptions,
-			qdrantUrl: this.qdrantUrl,
-			qdrantApiKey: this.qdrantApiKey,
+			vectorStoreType: this.vectorStoreType,
+			vectorStoreUrl: this.vectorStoreUrl,
+			vectorStoreApiKey: this.vectorStoreApiKey,
 			searchMinScore: this.searchMinScore,
 		}
 	}
@@ -322,13 +350,18 @@ export class CodeIndexConfigManager {
 	/**
 	 * Gets the current Qdrant configuration
 	 */
-	public get qdrantConfig(): { url?: string; apiKey?: string } {
+
+	public get vectorStoreConfig(): {
+		type?: "qdrant" | "faiss" | "chroma"
+		url?: string
+		apiKey?: string
+	} {
 		return {
-			url: this.qdrantUrl,
-			apiKey: this.qdrantApiKey,
+			type: this.vectorStoreType,
+			url: this.vectorStoreUrl,
+			apiKey: this.vectorStoreApiKey,
 		}
 	}
-
 	/**
 	 * Gets the current model ID being used for embeddings.
 	 */
@@ -341,5 +374,12 @@ export class CodeIndexConfigManager {
 	 */
 	public get currentSearchMinScore(): number | undefined {
 		return this.searchMinScore
+	}
+
+	/**
+	 * Clears the stored configuration by calling resetAllState on the ContextProxy instance.
+	 */
+	public async clearConfiguration(): Promise<void> {
+		await this.contextProxy.resetAllState()
 	}
 }

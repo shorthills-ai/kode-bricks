@@ -38,9 +38,9 @@ describe("CodeIndexConfigManager", () => {
 				modelId: undefined,
 				openAiOptions: { openAiNativeApiKey: "" },
 				ollamaOptions: { ollamaBaseUrl: "" },
-				qdrantUrl: "http://localhost:6333",
-				qdrantApiKey: "",
-				searchMinScore: 0.4,
+				vectorStoreType: "qdrant",
+				vectorStoreUrl: "",
+				vectroStoreApiKey: "",
 			})
 			expect(result.requiresRestart).toBe(false)
 		})
@@ -48,7 +48,10 @@ describe("CodeIndexConfigManager", () => {
 		it("should load configuration from globalState and secrets", async () => {
 			const mockGlobalState = {
 				codebaseIndexEnabled: true,
-				codebaseIndexQdrantUrl: "http://qdrant.local",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://qdrant.local",
+				codebaseIndexVectorStoreApiKey: "test-qdrant-key",
+				codebaseIndexQdrantUrl: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "text-embedding-3-large",
@@ -953,13 +956,6 @@ describe("CodeIndexConfigManager", () => {
 
 		it("should return correct embedder provider", () => {
 			expect(configManager.currentEmbedderProvider).toBe("openai")
-		})
-
-		it("should return correct Qdrant configuration", () => {
-			expect(configManager.qdrantConfig).toEqual({
-				url: "http://qdrant.local",
-				apiKey: "test-qdrant-key",
-			})
 		})
 
 		it("should return correct model ID", () => {

@@ -79,7 +79,7 @@ export async function codebaseSearchTool(
 			throw new Error("Code Indexing is disabled in the settings.")
 		}
 		if (!manager.isFeatureConfigured) {
-			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
+			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Vector DB URL).")
 		}
 
 		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, directoryPrefix)
