@@ -10,7 +10,7 @@ import type {
 import { marketplaceItemSchema } from "@roo-code/types"
 
 import { Mode } from "./modes"
-import { Domain } from "domain"
+import { Domain } from "./domains"
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
 

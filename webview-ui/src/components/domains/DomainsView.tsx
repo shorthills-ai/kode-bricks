@@ -3,10 +3,9 @@ import { VSCodeTextArea, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { Trans } from "react-i18next"
 import { ChevronsUpDown, X } from "lucide-react"
 
-import { DomainConfig, GroupEntry, ToolGroup } from "@roo-code/types"
+import { DomainConfig } from "@roo-code/types"
 
-import { getAllDomains, findDomainBySlug } from "@roo/domains"
-import { TOOL_GROUPS } from "@roo/tools"
+import { getAllDomains } from "@roo/domains"
 
 import { vscode } from "@src/utils/vscode"
 import { buildDocLink } from "@src/utils/docLinks"
@@ -32,9 +31,6 @@ import {
 } from "@src/components/ui"
 
 // Get all available groups that should show in prompts view
-const availableGroups = (Object.keys(TOOL_GROUPS) as ToolGroup[]).filter((group) => !TOOL_GROUPS[group].alwaysAvailable)
-
-type DomainSource = "global" | "project"
 
 type DomainsViewProps = {
 	onDone: () => void
@@ -66,7 +62,6 @@ const DomainsView = ({ onDone }: DomainsViewProps) => {
 	const [selectedPromptTitle, setSelectedPromptTitle] = useState("")
 	// const [isToolsEditDomain, setIsToolsEditDomain] = useState(false)
 	const [showConfigMenu, setShowConfigMenu] = useState(false)
-	const [isCreateDomainDialogOpen, setIsCreateDomainDialogOpen] = useState(false)
 	const [isSystemPromptDisclosureOpen, setIsSystemPromptDisclosureOpen] = useState(false)
 
 	// State for domain selection popover and search
@@ -183,7 +178,6 @@ const DomainsView = ({ onDone }: DomainsViewProps) => {
 			name = `${baseNamePrefix} ${attempt + 1}`
 			slug = generateSlug(name)
 		}
-		setIsCreateDomainDialogOpen(true)
 	}, [generateSlug, isNameOrSlugTaken])
 
 	// Handle clicks outside the config menu
