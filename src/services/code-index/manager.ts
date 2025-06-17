@@ -193,7 +193,13 @@ export class CodeIndexManager {
 
 	public async startIndexing(): Promise<void> {
 		if (!this.isFeatureEnabled) {
+			console.debug("Code indexing feature is not enabled. Cannot start indexing.")
 			return
+		}
+		if (this._orchestrator) {
+			await this._orchestrator.startIndexing()
+		} else {
+			console.error("Orchestrator is not initialized. Cannot start indexing.")
 		}
 		this.assertInitialized()
 		await this._orchestrator!.startIndexing()
@@ -222,8 +228,8 @@ export class CodeIndexManager {
 	}
 
 	/**
-	 * Clears all index data by stopping the watcher, clearing the Qdrant collection,
-	 * and deleting the cache file.
+	 * Clears all index data by stopping the watcher, clearing the vector store,
+	 * deleting the cache file, and resetting the configuration.
 	 */
 	public async clearIndexData(): Promise<void> {
 		if (!this.isFeatureEnabled) {
@@ -232,6 +238,10 @@ export class CodeIndexManager {
 		this.assertInitialized()
 		await this._orchestrator!.clearIndexData()
 		await this._cacheManager!.clearCacheFile()
+		// Clear the stored configuration
+		if (this._configManager) {
+			await this._configManager.clearConfiguration()
+		}
 	}
 
 	// --- Private Helpers ---

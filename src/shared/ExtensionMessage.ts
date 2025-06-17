@@ -15,6 +15,7 @@ import { GitCommit } from "../utils/git"
 
 import { McpServer } from "./mcp"
 import { Mode } from "./modes"
+import { Domain } from "./domains"
 import { RouterModels } from "./api"
 import type { MarketplaceItem } from "@roo-code/types"
 
@@ -122,6 +123,7 @@ export interface ExtensionMessage {
 	commits?: GitCommit[]
 	listApiConfig?: ProviderSettingsEntry[]
 	mode?: Mode
+	domain?: Domain
 	customMode?: ModeConfig
 	slug?: string
 	success?: boolean
@@ -229,6 +231,7 @@ export type ExtensionState = Pick<
 	enableMcpServerCreation: boolean
 
 	mode: Mode
+	domain: Domain
 	customModes: ModeConfig[]
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true} if diffEnabled)
 
@@ -275,6 +278,7 @@ export interface ClineSayTool {
 	regex?: string
 	filePattern?: string
 	mode?: string
+	domain?: string
 	reason?: string
 	isOutsideWorkspace?: boolean
 	isProtected?: boolean

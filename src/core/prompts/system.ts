@@ -1,9 +1,10 @@
 import * as vscode from "vscode"
 import * as os from "os"
 
-import type { ModeConfig, PromptComponent, CustomModePrompts } from "@roo-code/types"
+import { type ModeConfig, PromptComponent, CustomModePrompts } from "@roo-code/types"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
+import { Domain, defaultDomainSlug, domains, getDomainBySlug, getDomainSelection } from "../../shared/domains"
 import { DiffStrategy } from "../../shared/tools"
 import { formatLanguage } from "../../shared/language"
 
@@ -25,12 +26,14 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 } from "./sections"
+// ...existing code...
 
 async function generatePrompt(
 	context: vscode.ExtensionContext,
 	cwd: string,
 	supportsComputerUse: boolean,
 	mode: Mode,
+	domain: Domain,
 	mcpHub?: McpHub,
 	diffStrategy?: DiffStrategy,
 	browserViewportSize?: string,
@@ -52,9 +55,16 @@ async function generatePrompt(
 	// If diff is disabled, don't pass the diffStrategy
 	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
 
-	// Get the full mode config to ensure we have the role definition (used for groups, etc.)
+	// Get the full mode cand domain config to ensure we have the role definition (used for groups, etc.)
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
+
+	const dominConfig = getDomainBySlug(domain) || domains.find((d) => d.slug === domain) || domains[0]
+	const domaindetails = getDomainSelection(domain, promptComponent)
+
+	// Debug logging for role definitions
+	console.debug("[SYSTEM_PROMPT] Mode roleDefinition:", roleDefinition)
+	console.debug("[SYSTEM_PROMPT] Domain roleDefinition:", domaindetails.roleDefinition)
 
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
@@ -66,6 +76,8 @@ async function generatePrompt(
 	const codeIndexManager = CodeIndexManager.getInstance(context)
 
 	const basePrompt = `${roleDefinition}
+
+    ${domaindetails.roleDefinition}
 
 ${markdownFormattingSection()}
 
@@ -99,7 +111,7 @@ ${getSystemInfoSection(cwd)}
 
 ${getObjectiveSection(codeIndexManager, experiments)}
 
-${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, { language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions })}`
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, domain, { language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions })}`
 
 	return basePrompt
 }
@@ -112,6 +124,7 @@ export const SYSTEM_PROMPT = async (
 	diffStrategy?: DiffStrategy,
 	browserViewportSize?: string,
 	mode: Mode = defaultModeSlug,
+	domain: string = defaultDomainSlug,
 	customModePrompts?: CustomModePrompts,
 	customModes?: ModeConfig[],
 	globalCustomInstructions?: string,
@@ -138,17 +151,19 @@ export const SYSTEM_PROMPT = async (
 	const variablesForPrompt: PromptVariables = {
 		workspace: cwd,
 		mode: mode,
+		domain: domain,
 		language: language ?? formatLanguage(vscode.env.language),
 		shell: vscode.env.shell,
 		operatingSystem: os.type(),
 	}
-	const fileCustomSystemPrompt = await loadSystemPromptFile(cwd, mode, variablesForPrompt)
+	const fileCustomSystemPrompt = await loadSystemPromptFile(cwd, mode, domain, variablesForPrompt)
 
 	// Check if it's a custom mode
 	const promptComponent = getPromptComponent(customModePrompts?.[mode])
 
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
+	const currentDomain = getDomainBySlug(domain) || domains.find((d) => d.slug === domain) || domains[0]
 
 	// If a file-based custom system prompt exists, use it
 	if (fileCustomSystemPrompt) {
@@ -163,6 +178,7 @@ export const SYSTEM_PROMPT = async (
 			globalCustomInstructions || "",
 			cwd,
 			mode,
+			domain,
 			{ language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions },
 		)
 
@@ -182,6 +198,7 @@ ${customInstructions}`
 		cwd,
 		supportsComputerUse,
 		currentMode.slug,
+		currentDomain.slug,
 		mcpHub,
 		effectiveDiffStrategy,
 		browserViewportSize,

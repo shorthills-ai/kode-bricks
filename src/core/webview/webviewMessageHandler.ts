@@ -36,6 +36,7 @@ import { openMention } from "../mentions"
 import { TelemetrySetting } from "../../shared/TelemetrySetting"
 import { getWorkspacePath } from "../../utils/path"
 import { Mode, defaultModeSlug } from "../../shared/modes"
+import { Domain } from "../../shared/domains"
 import { getModels, flushModels } from "../../api/providers/fetchers/modelCache"
 import { GetModelsOptions } from "../../shared/api"
 import { generateSystemPrompt } from "./generateSystemPrompt"
@@ -827,6 +828,11 @@ export const webviewMessageHandler = async (
 		case "mode":
 			await provider.handleModeSwitch(message.text as Mode)
 			break
+		case "domain":
+			console.debug("[Domain] Received domain switch request:", message.text)
+			await provider.handleDomainSwitch(message.text as Domain)
+			console.debug("[Domain] Domain switch completed:", message.text)
+			break
 		case "updateSupportPrompt":
 			try {
 				if (!message?.values) {
@@ -1395,7 +1401,9 @@ export const webviewMessageHandler = async (
 		case "codebaseIndexConfig": {
 			const codebaseIndexConfig = message.values ?? {
 				codebaseIndexEnabled: false,
-				codebaseIndexQdrantUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreType: "qdrant",
+				codebaseIndexVectorStoreUrl: "http://localhost:6333",
+				codebaseIndexVectorStoreApiKey: "",
 				codebaseIndexEmbedderProvider: "openai",
 				codebaseIndexEmbedderBaseUrl: "",
 				codebaseIndexEmbedderModelId: "",

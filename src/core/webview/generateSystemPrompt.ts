@@ -1,5 +1,6 @@
 import { WebviewMessage } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug, getGroupName } from "../../shared/modes"
+import { defaultDomainSlug } from "../../shared/domains"
 import { buildApiHandler } from "../../api"
 import { experiments as experimentsModule, EXPERIMENT_IDS } from "../../shared/experiments"
 
@@ -39,6 +40,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 	const cwd = provider.cwd
 
 	const mode = message.mode ?? defaultModeSlug
+	const domain = message.domain ?? defaultDomainSlug
 	const customModes = await provider.customModesManager.getCustomModes()
 
 	const rooIgnoreInstructions = provider.getCurrentCline()?.rooIgnoreController?.getInstructions()
@@ -71,6 +73,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 		diffStrategy,
 		browserViewportSize ?? "900x600",
 		mode,
+		domain,
 		customModePrompts,
 		customModes,
 		customInstructions,

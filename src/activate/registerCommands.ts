@@ -151,6 +151,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		if (!visibleProvider) return
 		visibleProvider.postMessageToWebview({ type: "action", action: "marketplaceButtonClicked" })
 	},
+
 	showHumanRelayDialog: (params: { requestId: string; promptText: string }) => {
 		const panel = getPanel()
 
@@ -194,6 +195,16 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		}
 
 		visibleProvider.postMessageToWebview({ type: "acceptInput" })
+	},
+	"codeIndex.startIndexing": async () => {
+		const codeIndexManager = CodeIndexManager.getInstance(context)
+		if (codeIndexManager) {
+			const contextProxy = await ContextProxy.getInstance(context)
+			await codeIndexManager.initialize(contextProxy)
+			await codeIndexManager.startIndexing()
+		} else {
+			outputChannel.appendLine("[CodeIndexManager] CodeIndexManager instance not found.")
+		}
 	},
 })
 

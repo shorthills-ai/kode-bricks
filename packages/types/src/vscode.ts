@@ -51,6 +51,7 @@ export const commandIds = [
 
 	"focusInput",
 	"acceptInput",
+	"codeIndex.startIndexing",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

@@ -93,6 +93,10 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.MODE_SWITCH, { taskId, newMode })
 	}
 
+	public captureDomainSwitch(taskId: string, newDomain: string): void {
+		this.captureEvent(TelemetryEventName.DOMAIN_SWITCH, { taskId, newDomain })
+	}
+
 	public captureToolUsage(taskId: string, tool: string): void {
 		this.captureEvent(TelemetryEventName.TOOL_USED, { taskId, tool })
 	}
@@ -173,7 +177,7 @@ export class TelemetryService {
 			itemType,
 			itemName,
 			target,
-			... (properties || {}),
+			...(properties || {}),
 		})
 	}
 

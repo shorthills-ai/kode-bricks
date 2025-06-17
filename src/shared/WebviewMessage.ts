@@ -10,6 +10,7 @@ import type {
 import { marketplaceItemSchema } from "@roo-code/types"
 
 import { Mode } from "./modes"
+import { Domain } from "domain"
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
 
@@ -116,6 +117,7 @@ export interface WebviewMessage {
 		| "requestDelaySeconds"
 		| "setApiConfigPassword"
 		| "mode"
+		| "domain"
 		| "updatePrompt"
 		| "updateSupportPrompt"
 		| "getSystemPrompt"
@@ -182,6 +184,7 @@ export interface WebviewMessage {
 	toolName?: string
 	alwaysAllow?: boolean
 	mode?: Mode
+	domain?: Domain
 	promptMode?: PromptMode
 	customPrompt?: PromptComponent
 	dataUrls?: string[]

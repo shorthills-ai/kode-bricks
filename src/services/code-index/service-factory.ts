@@ -92,13 +92,40 @@ export class CodeIndexServiceFactory {
 			throw new Error(errorMessage)
 		}
 
-		if (!config.qdrantUrl) {
-			// This check remains important
-			throw new Error("Qdrant URL missing for vector store creation")
-		}
+		// if (!config.qdrantUrl) {
+		// 	// This check remains important
+		// 	throw new Error("Qdrant URL missing for vector store creation")
+		// }
 
-		// Assuming constructor is updated: new QdrantVectorStore(workspacePath, url, vectorSize, apiKey?)
-		return new QdrantVectorStore(this.workspacePath, config.qdrantUrl, vectorSize, config.qdrantApiKey)
+		// // Assuming constructor is updated: new QdrantVectorStore(workspacePath, url, vectorSize, apiKey?)
+		// return new QdrantVectorStore(this.workspacePath, config.qdrantUrl, vectorSize, config.qdrantApiKey)
+
+		// check the vectorStoreType and create the appropriate vector store instance
+		// check if the vectorStore url is defined
+		if (!config.vectorStoreUrl) {
+			throw new Error("Vector store URL missing for vector store creation")
+		}
+		console.debug(`[CodeIndexServiceFactory] Vector store type: ${config.vectorStoreType}`)
+		console.debug(`[CodeIndexServiceFactory] Vector store URL: ${config.vectorStoreUrl}`)
+		if (config.vectorStoreType === "qdrant") {
+			return new QdrantVectorStore(
+				this.workspacePath,
+				config.vectorStoreUrl,
+				vectorSize,
+				config.vectorStoreApiKey,
+			)
+		} else if (config.vectorStoreType === "faiss") {
+			// Assuming a FaissVectorStore class exists
+			// return new FaissVectorStore(this.workspacePath, config.vectorStoreUrl, vectorSize)
+			console.debug(`[CodeIndexServiceFactory] Faiss vector store is not implemented yet`)
+			throw new Error("Faiss vector store is not implemented yet")
+		} else if (config.vectorStoreType === "chroma") {
+			// Assuming a ChromaVectorStore class exists
+			// return new ChromaVectorStore(this.workspacePath, config.vectorStoreUrl, vectorSize)
+			throw new Error("Chroma vector store is not implemented yet")
+		}
+		// Add more vector store types here as needed
+		throw new Error(`Invalid vector store type configured: ${config.vectorStoreType}`)
 	}
 
 	/**
