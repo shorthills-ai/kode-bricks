@@ -1,3 +1,5 @@
+// This is the vector retriever for the domain. It uses the Faiss server to retrieve the top N text chunks for a given query.
+
 import { domains } from "../../shared/domains"
 import nodeFetch from "node-fetch"
 
