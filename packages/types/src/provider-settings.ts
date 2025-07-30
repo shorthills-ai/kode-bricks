@@ -151,6 +151,9 @@ const lmStudioSchema = baseProviderSettingsSchema.extend({
 const geminiSchema = apiModelIdProviderModelSchema.extend({
 	geminiApiKey: z.string().optional(),
 	googleGeminiBaseUrl: z.string().optional(),
+	enableCaching: z.boolean().optional(),
+	cacheKey: z.string().optional(),
+	cacheTTL: z.string().optional(),
 })
 
 const openAiNativeSchema = apiModelIdProviderModelSchema.extend({

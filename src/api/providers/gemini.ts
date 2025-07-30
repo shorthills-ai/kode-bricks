@@ -21,12 +21,16 @@ import { BaseProvider } from "./base-provider"
 
 type GeminiHandlerOptions = ApiHandlerOptions & {
 	isVertex?: boolean
+	enableCaching?: boolean
+	cacheTTL?: string
 }
 
 export class GeminiHandler extends BaseProvider implements SingleCompletionHandler {
-	protected options: ApiHandlerOptions
+	protected options: GeminiHandlerOptions
 
 	private client: GoogleGenAI
+	private cacheName?: string
+	private sessionId?: string
 
 	constructor({ isVertex, ...options }: GeminiHandlerOptions) {
 		super()
@@ -58,52 +62,92 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 					: new GoogleGenAI({ apiKey })
 	}
 
+	// Call this method at the start of a new session to reset cache
+	startSession(sessionId: string) {
+		this.sessionId = sessionId
+		this.cacheName = undefined
+		console.log(`[GeminiHandler] startSession called for sessionId: ${sessionId}, cache reset`)
+	}
+
+	// Optionally clear cache/session data on session end
+	endSession() {
+		console.log(`[GeminiHandler] endSession called for sessionId: ${this.sessionId}`)
+		this.cacheName = undefined
+		this.sessionId = undefined
+	}
+
 	async *createMessage(
 		systemInstruction: string,
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
 		const { id: model, info, reasoning: thinkingConfig, maxTokens } = this.getModel()
-
 		const contents = messages.map(convertAnthropicMessageToGemini)
 
-		const config: GenerateContentConfig = {
-			systemInstruction,
+		console.log("[GeminiHandler] createMessage - model:", model)
+		console.log("[GeminiHandler] createMessage - thinkingConfig:", thinkingConfig)
+		console.log("[GeminiHandler] createMessage - maxTokens:", maxTokens)
+		console.log("[GeminiHandler] createMessage - enableCaching:", this.options.enableCaching)
+		console.log("[GeminiHandler] createMessage - cacheTTL:", this.options.cacheTTL)
+		console.log("[GeminiHandler] createMessage - cacheName (before):", this.cacheName)
+		console.log("[GeminiHandler] createMessage - sessionId:", this.sessionId)
+
+		let config: GenerateContentConfig = {
 			httpOptions: this.options.googleGeminiBaseUrl ? { baseUrl: this.options.googleGeminiBaseUrl } : undefined,
-			thinkingConfig,
 			maxOutputTokens: this.options.modelMaxTokens ?? maxTokens ?? undefined,
 			temperature: this.options.modelTemperature ?? 0,
 		}
 
-		const params: GenerateContentParameters = { model, contents, config }
+		if (this.options.enableCaching && !this.cacheName) {
+			console.log("[GeminiHandler] createMessage - Creating cache for session:", this.sessionId)
+			const cache = await this.client.caches.create({
+				model,
+				config: {
+					systemInstruction,
+					ttl: this.options.cacheTTL ?? "3600s",
+				},
+			})
+			this.cacheName = cache.name
+			console.log("[GeminiHandler] createMessage - Cache created with name:", this.cacheName)
+		}
+
+		if (!this.options.enableCaching) {
+			// Only set systemInstruction/thinkingConfig if not using cache
+			config = {
+				...config,
+				systemInstruction,
+				thinkingConfig,
+			}
+		}
+
+		const params: GenerateContentParameters = {
+			model,
+			contents,
+			config: this.options.enableCaching ? { ...config, cachedContent: this.cacheName } : config,
+		}
+		console.log("[GeminiHandler] createMessage - Using cache with name:", this.cacheName)
 
 		const result = await this.client.models.generateContentStream(params)
 
 		let lastUsageMetadata: GenerateContentResponseUsageMetadata | undefined
 
 		for await (const chunk of result) {
-			// Process candidates and their parts to separate thoughts from content
 			if (chunk.candidates && chunk.candidates.length > 0) {
 				const candidate = chunk.candidates[0]
 				if (candidate.content && candidate.content.parts) {
 					for (const part of candidate.content.parts) {
 						if (part.thought) {
-							// This is a thinking/reasoning part
 							if (part.text) {
 								yield { type: "reasoning", text: part.text }
 							}
 						} else {
-							// This is regular content
 							if (part.text) {
 								yield { type: "text", text: part.text }
 							}
 						}
 					}
 				}
-			}
-
-			// Fallback to the original text property if no candidates structure
-			else if (chunk.text) {
+			} else if (chunk.text) {
 				yield { type: "text", text: chunk.text }
 			}
 
@@ -118,13 +162,22 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 			const cacheReadTokens = lastUsageMetadata.cachedContentTokenCount
 			const reasoningTokens = lastUsageMetadata.thoughtsTokenCount
 
+			const totalCost = this.calculateCost({ info, inputTokens, outputTokens, cacheReadTokens })
+			console.log("[GeminiHandler] createMessage - usageMetadata:", JSON.stringify(lastUsageMetadata, null, 2))
+			console.log("[GeminiHandler] createMessage - cost calculation:", {
+				inputTokens,
+				outputTokens,
+				cacheReadTokens,
+				totalCost,
+			})
+
 			yield {
 				type: "usage",
 				inputTokens,
 				outputTokens,
 				cacheReadTokens,
 				reasoningTokens,
-				totalCost: this.calculateCost({ info, inputTokens, outputTokens, cacheReadTokens }),
+				totalCost,
 			}
 		}
 	}
@@ -135,10 +188,6 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		const info: ModelInfo = geminiModels[id]
 		const params = getModelParams({ format: "gemini", modelId: id, model: info, settings: this.options })
 
-		// The `:thinking` suffix indicates that the model is a "Hybrid"
-		// reasoning model and that reasoning is required to be enabled.
-		// The actual model ID honored by Gemini's API does not have this
-		// suffix.
 		return { id: id.endsWith(":thinking") ? id.replace(":thinking", "") : id, info, ...params }
 	}
 
@@ -200,6 +249,7 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		cacheReadTokens?: number
 	}) {
 		if (!info.inputPrice || !info.outputPrice || !info.cacheReadsPrice) {
+			console.log("[GeminiHandler] calculateCost - missing price info", { info })
 			return undefined
 		}
 
@@ -207,8 +257,6 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 		let outputPrice = info.outputPrice
 		let cacheReadsPrice = info.cacheReadsPrice
 
-		// If there's tiered pricing then adjust the input and output token prices
-		// based on the input tokens used.
 		if (info.tiers) {
 			const tier = info.tiers.find((tier) => inputTokens <= tier.contextWindow)
 
@@ -219,7 +267,6 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 			}
 		}
 
-		// Subtract the cached input tokens from the total input tokens.
 		const uncachedInputTokens = inputTokens - cacheReadTokens
 
 		let cacheReadCost = cacheReadTokens > 0 ? cacheReadsPrice * (cacheReadTokens / 1_000_000) : 0
@@ -237,7 +284,8 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 			trace.cacheRead = { price: cacheReadsPrice, tokens: cacheReadTokens, cost: cacheReadCost }
 		}
 
-		// console.log(`[GeminiHandler] calculateCost -> ${totalCost}`, trace)
+		console.log("[GeminiHandler] calculateCost - trace:", trace)
+		console.log("[GeminiHandler] calculateCost - totalCost:", totalCost)
 
 		return totalCost
 	}
