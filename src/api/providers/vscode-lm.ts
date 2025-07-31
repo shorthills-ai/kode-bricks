@@ -447,6 +447,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			// Count tokens in the accumulated text after stream completion
 			const totalOutputTokens: number = await this.internalCountTokens(accumulatedText)
 
+			console.debug("[VSCodeLM] Full LLM response:", accumulatedText)
+
 			// Report final usage after stream completion
 			yield {
 				type: "usage",

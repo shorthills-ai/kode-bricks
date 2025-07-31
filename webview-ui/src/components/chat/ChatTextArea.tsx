@@ -779,27 +779,28 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const placeholderBottomText = `\n(${t("chat:addContext")}${shouldDisableImages ? `, ${t("chat:dragFiles")}` : `, ${t("chat:dragFilesImages")}`})`
 
-		// Domain dropdown options
-		const domainOptions = useMemo(
-			() => [
-				...getAllDomains().map((domain) => ({
-					value: domain.slug,
-					label: domain.name,
-					type: DropdownOptionType.ITEM,
-				})),
-				{
-					value: "sep-1",
-					label: t("chat:separator"),
-					type: DropdownOptionType.SEPARATOR,
-				},
-				{
-					value: "domainsButtonClicked",
-					label: t("chat:editDomains"),
-					type: DropdownOptionType.ACTION,
-				},
-			],
-			[t],
-		)
+		// Domain dropdown option for chatArea
+
+		// const domainOptions = useMemo(
+		// 	() => [
+		// 		...getAllDomains().map((domain) => ({
+		// 			value: domain.slug,
+		// 			label: domain.name,
+		// 			type: DropdownOptionType.ITEM,
+		// 		})),
+		// 		{
+		// 			value: "sep-1",
+		// 			label: t("chat:separator"),
+		// 			type: DropdownOptionType.SEPARATOR,
+		// 		},
+		// 		{
+		// 			value: "domainsButtonClicked",
+		// 			label: t("chat:editDomains"),
+		// 			type: DropdownOptionType.ACTION,
+		// 		},
+		// 	],
+		// 	[t],
+		// )
 
 		// Get the selected domain config for info display
 		// const selectedDomainConfig = useMemo(
@@ -1025,9 +1026,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				)}
 
 				<div className={cn("flex", "justify-between", "items-center", "mt-auto", "pt-0.5")}>
-					<div className={cn("flex", "items-center", "gap-1", "min-w-0")}>
-						<div className="shrink-0">
-							{/* Domain Dropdown */}
+					<div className={cn("flex", "items-center", "gap-1", "min-w-0")}>						{/* Domain Dropdown */}
+						{/* <div className="shrink-0">
+
 							<SelectDropdown
 								value={currentDomain}
 								title={t("chat:selectDomain")}
@@ -1037,7 +1038,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								}}
 								triggerClassName="w-full"
 							/>
-						</div>
+						</div> */}
 						<div className="shrink-0">
 							<SelectDropdown
 								value={mode}

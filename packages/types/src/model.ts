@@ -47,6 +47,8 @@ export const modelInfoSchema = z.object({
 	minTokensPerCachePoint: z.number().optional(),
 	maxCachePoints: z.number().optional(),
 	cachableFields: z.array(z.string()).optional(),
+	supportsExplicitCaching: z.boolean().optional(),
+	supportsImplicitCaching: z.boolean().optional(),
 	tiers: z
 		.array(
 			z.object({

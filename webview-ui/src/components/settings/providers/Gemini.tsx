@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { Checkbox } from "vscrui"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
@@ -17,10 +17,23 @@ type GeminiProps = {
 export const Gemini = ({ apiConfiguration, setApiConfigurationField }: GeminiProps) => {
 	const { t } = useAppTranslation()
 
+	// Initialize local states from apiConfiguration
 	const [googleGeminiBaseUrlSelected, setGoogleGeminiBaseUrlSelected] = useState(
 		!!apiConfiguration?.googleGeminiBaseUrl,
 	)
+	const [enableCaching, setEnableCaching] = useState(!!apiConfiguration?.enableCaching)
+	const [cacheKey, setCacheKey] = useState(apiConfiguration?.cacheKey || "")
+	const [ttl, setTTL] = useState(apiConfiguration?.cacheTTL || "3600s")
 
+	// Sync local state from apiConfiguration if it changes
+	useEffect(() => {
+		setGoogleGeminiBaseUrlSelected(!!apiConfiguration?.googleGeminiBaseUrl)
+		setEnableCaching(!!apiConfiguration?.enableCaching)
+		setCacheKey(apiConfiguration?.cacheKey || "")
+		setTTL(apiConfiguration?.cacheTTL || "3600s")
+	}, [apiConfiguration])
+
+	// Reusable input change handler for apiConfiguration fields
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
 			field: K,
@@ -28,7 +41,23 @@ export const Gemini = ({ apiConfiguration, setApiConfigurationField }: GeminiPro
 		) =>
 			(event: E | Event) => {
 				setApiConfigurationField(field, transform(event as E))
+				// Also update local state for controlled inputs:
+				if (field === "cacheKey") setCacheKey(transform(event as E) as string)
+				if (field === "cacheTTL") setTTL(transform(event as E) as string)
 			},
+		[setApiConfigurationField],
+	)
+
+	// Handle caching checkbox toggle
+	const onEnableCachingChange = useCallback(
+		(checked: boolean) => {
+			setEnableCaching(checked)
+			setApiConfigurationField("enableCaching", checked)
+			if (!checked) {
+				setApiConfigurationField("cacheKey", "")
+				setApiConfigurationField("cacheTTL", "3600s")
+			}
+		},
 		[setApiConfigurationField],
 	)
 
@@ -55,7 +84,6 @@ export const Gemini = ({ apiConfiguration, setApiConfigurationField }: GeminiPro
 					checked={googleGeminiBaseUrlSelected}
 					onChange={(checked: boolean) => {
 						setGoogleGeminiBaseUrlSelected(checked)
-
 						if (!checked) {
 							setApiConfigurationField("googleGeminiBaseUrl", "")
 						}
@@ -72,6 +100,36 @@ export const Gemini = ({ apiConfiguration, setApiConfigurationField }: GeminiPro
 					/>
 				)}
 			</div>
+
+			{/* Caching Settings */}
+			<div className="mt-4">
+				<Checkbox checked={enableCaching} onChange={onEnableCachingChange}>
+					{t("settings:providers.enableCaching")}
+				</Checkbox>
+			</div>
+
+			{enableCaching && (
+				<>
+					<div className="mt-2">
+						<label className="text-sm font-medium">{t("settings:providers.cacheKey")}</label>
+						<VSCodeTextField
+							value={cacheKey}
+							onInput={handleInputChange("cacheKey")}
+							placeholder={t("settings:providers.cacheKeyPlaceholder")}
+							className="w-full"
+						/>
+					</div>
+					<div className="mt-2">
+						<label className="text-sm font-medium">{t("settings:providers.ttl")}</label>
+						<VSCodeTextField
+							value={ttl}
+							onInput={handleInputChange("cacheTTL")}
+							placeholder={t("settings:providers.ttlPlaceholder")}
+							className="w-full"
+						/>
+					</div>
+				</>
+			)}
 		</>
 	)
 }

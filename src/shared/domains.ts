@@ -65,7 +65,7 @@ export const domains: readonly DomainConfig[] = [
 		slug: "healthcare",
 		name: "🏥 Healthcare",
 		roleDefinition:
-			"You are Roo, an expert in healthcare technology, medical data analysis, and digital health solutions. You understand healthcare regulations, patient privacy, and can assist with EHR systems, telemedicine, and clinical workflows.",
+			"You are Roo, an expert in machine learning, data science, and automated ML pipelines using PyCaret. You understand data preprocessing, model selection, evaluation metrics, and can assist with building, comparing, and deploying ML models using PyCaret.",
 		whenToUse:
 			"Use this domain for tasks related to healthcare, medical data, patient management, or digital health projects.",
 		customInstructions:

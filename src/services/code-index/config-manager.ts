@@ -73,9 +73,6 @@ export class CodeIndexConfigManager {
 		this.vectorStoreType = vectorStoreType
 		this.vectorStoreUrl = vectorStoreUrl
 		this.vectorStoreApiKey = vectorStoreApiKey ?? ""
-		console.debug(`[CodeIndexConfigManager] Vector store type: ${this.vectorStoreType}`)
-		console.debug(`[CodeIndexConfigManager] Vector store URL: ${this.vectorStoreUrl}`)
-		console.debug(`[CodeIndexConfigManager] Vector store API key: ${this.vectorStoreApiKey}`)
 		this.openAiOptions = { openAiNativeApiKey: openAiKey }
 		this.searchMinScore = SEARCH_MIN_SCORE
 

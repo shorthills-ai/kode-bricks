@@ -1,3 +1,6 @@
+// This is the domain configuration file made to be used with the rag-mcp server to switch between different domains.
+
+
 import { z } from "zod"
 
 import { toolGroupsSchema } from "./tool.js"
@@ -36,21 +39,6 @@ const groupEntrySchema = z.union([toolGroupsSchema, z.tuple([toolGroupsSchema, g
 
 // type GroupEntry = z.infer<typeof groupEntrySchema>
 
-/**
- * DomainConfig
- */
-
-/**
- * Built-in domain slugs:
- * - code: General software engineering
- * - architect: Technical planning
- * - ask: Q&A
- * - debug: Debugging
- * - orchestrator: Workflow orchestration
- * - healthcare: Healthcare technology and medical data
- * - automobile: Automotive industry and vehicle systems
- * - manufacturing: Manufacturing, automation, and supply chain
- */
 
 const groupEntryArraySchema = z.array(groupEntrySchema).refine(
 	(groups) => {

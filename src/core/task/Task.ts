@@ -1,5 +1,6 @@
 import * as path from "path"
 import os from "os"
+import fs from "fs"
 import crypto from "crypto"
 import EventEmitter from "events"
 
@@ -87,9 +88,9 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { getMessagesSinceLastSummary, summarizeConversation } from "../condense"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
-import { DomainVectorRetriever, SupportedDomain } from "../../services/code-index/domain-vector-retriever"
-import { CodeIndexOllamaEmbedder } from "../../services/code-index/embedders/ollama"
-import { CodeIndexManager } from "../../services/code-index/manager"
+import { domains } from "../../shared/domains"
+
+import type { SingleCompletionHandler } from "../../api";
 
 export type ClineEvents = {
 	message: [{ action: "created" | "updated"; message: ClineMessage }]
@@ -199,7 +200,16 @@ export class Task extends EventEmitter<ClineEvents> {
 	didRejectTool = false
 	didAlreadyUseTool = false
 	didCompleteReadingStream = false
-	private domainVectorRetriever: DomainVectorRetriever | null = null
+
+	/**
+	 * Pipeline step state: tracks if the baseline compare_models code has been generated for this task.
+	 */
+	private hasGeneratedBaselineCompareModels: boolean = false;
+
+	/**
+	 * Pipeline step state: tracks if code has been generated after receiving dataset configuration.
+	 */
+	private hasGeneratedCodeAfterDatasetConfig: boolean = false;
 
 	constructor({
 		provider,
@@ -682,7 +692,15 @@ export class Task extends EventEmitter<ClineEvents> {
 						this.lastMessageTs = sayTs
 					}
 
-					await this.addToClineMessages({ ts: sayTs, type: "say", say: type, text, images, contextCondense })
+					await this.addToClineMessages({
+						ts: sayTs,
+						type: "say",
+						say: type,
+						text,
+						images,
+						checkpoint,
+						contextCondense,
+					})
 				}
 			}
 		} else {
@@ -1204,8 +1222,8 @@ export class Task extends EventEmitter<ClineEvents> {
 			}
 		}
 
-		// Inject domain context if applicable
-		const userContentWithDomainContext = await this.maybeInjectDomainContext(userContent)
+		// Inject domain context if applicable (now returns string | undefined)
+		// const ragContext = await this.maybeInjectDomainContext(userContent);
 
 		// Getting verbose details is an expensive operation, it uses ripgrep to
 		// top-down build file structure of project which for large projects can
@@ -1215,7 +1233,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			"api_req_started",
 			JSON.stringify({
 				request:
-					userContentWithDomainContext.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") +
+					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") +
 					"\n\nLoading...",
 			}),
 		)
@@ -1223,7 +1241,7 @@ export class Task extends EventEmitter<ClineEvents> {
 		const { showRooIgnoredFiles = true } = (await this.providerRef.deref()?.getState()) ?? {}
 
 		const parsedUserContent = await processUserContentMentions({
-			userContent: userContentWithDomainContext,
+			userContent: userContent,
 			cwd: this.cwd,
 			urlContentFetcher: this.urlContentFetcher,
 			fileContextTracker: this.fileContextTracker,
@@ -1262,11 +1280,8 @@ export class Task extends EventEmitter<ClineEvents> {
 
 			// We can't use `api_req_finished` anymore since it's a unique case
 			// where it could come after a streaming message (i.e. in the middle
-			// of being updated or executed).
-			// Fortunately `api_req_finished` was always parsed out for the GUI
-			// anyways, so it remains solely for legacy purposes to keep track
-			// of prices in tasks from history (it's worth removing a few months
-			// from now).
+			// of being updated or executed), so we just resort to replicating a
+			// cancel task.
 			const updateApiReqMsg = (cancelReason?: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
 				this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 					...JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}"),
@@ -1347,7 +1362,7 @@ export class Task extends EventEmitter<ClineEvents> {
 			// Yields only if the first chunk is successful, otherwise will
 			// allow the user to retry the request (most likely due to rate
 			// limit error, which gets thrown on the first chunk).
-			const stream = this.attemptApiRequest()
+			const stream = this.attemptApiRequest(0, userContent)
 			let assistantMessage = ""
 			let reasoningMessage = ""
 			this.isStreaming = true
@@ -1570,33 +1585,25 @@ export class Task extends EventEmitter<ClineEvents> {
 		}
 	}
 
-	private async getSystemPrompt(): Promise<string> {
-		const { mcpEnabled } = (await this.providerRef.deref()?.getState()) ?? {}
-		let mcpHub: McpHub | undefined
+	private async getSystemPrompt(ragContext?: string): Promise<string> {
+		const { mcpEnabled } = (await this.providerRef.deref()?.getState()) ?? {};
+		console.log('[DEBUG] MCP enabled:', mcpEnabled);
+		let mcpHub: McpHub | undefined;
 		if (mcpEnabled ?? true) {
-			const provider = this.providerRef.deref()
-
+			const provider = this.providerRef.deref();
 			if (!provider) {
-				throw new Error("Provider reference lost during view transition")
+				throw new Error("Provider reference lost during view transition");
 			}
-
-			// Wait for MCP hub initialization through McpServerManager
-			mcpHub = await McpServerManager.getInstance(provider.context, provider)
-
+			mcpHub = await McpServerManager.getInstance(provider.context, provider);
 			if (!mcpHub) {
-				throw new Error("Failed to get MCP hub from server manager")
+				throw new Error("Failed to get MCP hub from server manager");
 			}
-
-			// Wait for MCP servers to be connected before generating system prompt
 			await pWaitFor(() => !mcpHub!.isConnecting, { timeout: 10_000 }).catch(() => {
-				console.error("MCP servers failed to connect in time")
-			})
+				console.error("MCP servers failed to connect in time");
+			});
 		}
-
-		const rooIgnoreInstructions = this.rooIgnoreController?.getInstructions()
-
-		const state = await this.providerRef.deref()?.getState()
-
+		const rooIgnoreInstructions = this.rooIgnoreController?.getInstructions();
+		const state = await this.providerRef.deref()?.getState();
 		const {
 			browserViewportSize,
 			mode,
@@ -1610,15 +1617,12 @@ export class Task extends EventEmitter<ClineEvents> {
 			language,
 			maxConcurrentFileReads,
 			maxReadFileLine,
-		} = state ?? {}
-
-		return await (async () => {
-			const provider = this.providerRef.deref()
-
+		} = state ?? {};
+		let basePrompt = await (async () => {
+			const provider = this.providerRef.deref();
 			if (!provider) {
-				throw new Error("Provider not available")
+				throw new Error("Provider not available");
 			}
-
 			return SYSTEM_PROMPT(
 				provider.context,
 				this.cwd,
@@ -1640,11 +1644,16 @@ export class Task extends EventEmitter<ClineEvents> {
 				{
 					maxConcurrentFileReads,
 				},
-			)
-		})()
+			);
+		})();
+
+		if (ragContext) {
+			basePrompt += `\n\n[Domain-Specific Context]\n${ragContext}`;
+		}
+		return basePrompt;
 	}
 
-	public async *attemptApiRequest(retryAttempt: number = 0): ApiStream {
+	public async *attemptApiRequest(retryAttempt: number = 0, userContent: Anthropic.Messages.ContentBlockParam[]): ApiStream {
 		const state = await this.providerRef.deref()?.getState()
 		const {
 			apiConfiguration,
@@ -1699,9 +1708,21 @@ export class Task extends EventEmitter<ClineEvents> {
 
 		// Update last request time before making the request
 		this.lastApiRequestTime = Date.now()
+		// console.debug('[RAG Pipeline] Content passed to maybeInjectDomainContext:', userContent);
+		// const ragContext = await this.maybeInjectDomainContext(userContent);
+		// console.debug('[RAG Pipeline] Retrieved ragContext:', ragContext);
+		// const systemPrompt = await this.getSystemPrompt(ragContext);
+		const systemPrompt = await this.getSystemPrompt("");
 
-		const systemPrompt = await this.getSystemPrompt()
-		const { contextTokens } = this.getTokenUsage()
+		// Prepare conversation history for logging and API request
+		const messagesSinceLastSummary = getMessagesSinceLastSummary(this.apiConversationHistory)
+		const cleanConversationHistory = maybeRemoveImageBlocks(messagesSinceLastSummary, this.api).map(
+			({ role, content }) => ({ role, content }),
+		)
+
+		// Log the full system prompt and API request content for debugging MCP server configuration
+
+		const { contextTokens } = this.getTokenUsage();
 
 		if (contextTokens) {
 			// Default max tokens value for thinking models when no specific
@@ -1749,11 +1770,6 @@ export class Task extends EventEmitter<ClineEvents> {
 				)
 			}
 		}
-
-		const messagesSinceLastSummary = getMessagesSinceLastSummary(this.apiConversationHistory)
-		const cleanConversationHistory = maybeRemoveImageBlocks(messagesSinceLastSummary, this.api).map(
-			({ role, content }) => ({ role, content }),
-		)
 
 		// Check if we've reached the maximum number of auto-approved requests
 		const maxRequests = state?.allowedMaxRequests || Infinity
@@ -1836,7 +1852,7 @@ export class Task extends EventEmitter<ClineEvents> {
 
 				// Delegate generator output from the recursive call with
 				// incremented retry count.
-				yield* this.attemptApiRequest(retryAttempt + 1)
+				yield* this.attemptApiRequest(retryAttempt + 1, userContent)
 
 				return
 			} else {
@@ -1854,7 +1870,7 @@ export class Task extends EventEmitter<ClineEvents> {
 				await this.say("api_req_retried")
 
 				// Delegate generator output from the recursive call.
-				yield* this.attemptApiRequest()
+				yield* this.attemptApiRequest(retryAttempt + 1, userContent)
 				return
 			}
 		}
@@ -1925,58 +1941,166 @@ export class Task extends EventEmitter<ClineEvents> {
 		return typeof block === "object" && block !== null && "text" in block && typeof (block as any).text === "string"
 	}
 
+	/**
+	 * Ask the LLM if retrieval is needed for this user prompt, given the vector DB contains domain-specific documents for all domains.
+	 * Only recommend retrieval if it is truly necessary for the user's request (i.e., the task cannot be completed with the information already provided).
+	 */
+	private async shouldRetrieveContext(userPrompt: string): Promise<boolean> {
+		const handler = this.api as unknown as SingleCompletionHandler;
+		if (typeof handler.completePrompt !== "function") return true; // fallback: always retrieve
+		const checkPrompt = `You have access to a retrieval system containing domain-specific documents for all domains.\n\nONLY recommend retrieving external context (RAG) if it is absolutely necessary to answer the user's request—specifically, ONLY if the task cannot be completed with the information already provided by the user.\n\nIf you are confident you can answer the user's request or generate the required code/analysis without external domain-specific context, reply with NO.\nIf you believe domain-specific external context is essential and cannot proceed without it, reply with YES.\n\nReply with YES or NO only.\n\nUser query: ${userPrompt}`;
+		try {
+			const resp = await handler.completePrompt(checkPrompt);
+			const result = /^yes\b/i.test(resp.trim()); 
+			console.debug(`[DomainContext] shouldRetrieveContext LLM response: ${resp.trim()} => ${result}`);
+			return result;
+		} catch (e) {
+			console.debug('[DomainContext] Error in shouldRetrieveContext, defaulting to retrieve:', e);
+			return true; // fallback: always retrieve
+		}
+	}
+
+	/**
+	 * Inject domain-specific RAG context if needed, using the new workflow:
+	 * 1. PyCaret configuration is always hardcoded in the system prompt (not from RAG).
+	 * 2. RAG is used only for domain-specific documents.
+	 * 3. On user query:
+	 *    a. Retrieve available domains from MCP.
+	 *    b. Send user query and available domains to LLM to select the most relevant domain.
+	 *    c. If RAG is needed (checked via shouldRetrieveContext), retrieve RAG context for the selected domain.
+	 * 4. Only run RAG if shouldRetrieveContext returns true.
+	 * 5. The system prompt always includes the PyCaret workflow/configuration.
+	 */
 	private async maybeInjectDomainContext(
 		userContent: Anthropic.Messages.ContentBlockParam[],
-	): Promise<Anthropic.Messages.ContentBlockParam[]> {
-		// Get the selected domain from the provider state (like 'mode')
-		const provider = this.providerRef.deref()
+	): Promise<string | undefined> {
+		const provider = this.providerRef.deref();
 		if (!provider) {
-			console.debug("[DomainContext] Provider not available, skipping domain context injection.")
-			return userContent
+			console.debug('[DomainContext] Provider not available, skipping domain context injection.');
+			return undefined;
 		}
-		const state = await provider.getState()
-		const selectedDomain = state?.domain as SupportedDomain | undefined
-		if (!selectedDomain) {
-			console.debug(
-				`[DomainContext] No supported domain selected (got: ${selectedDomain}), skipping domain context injection.`,
-			)
-			return userContent
+		const mcpHub = provider.getMcpHub();
+		if (!mcpHub) {
+			console.debug('[DomainContext] MCP hub not available.');
+			return undefined;
 		}
-		console.debug(`[DomainContext] Domain context pipeline triggered for domain: ${selectedDomain}`)
-		// Get embedder config from CodeIndexManager
-		// @ts-expect-error: accessing private _configManager for prototype/demo
-		const codeIndexManager = CodeIndexManager.getInstance()
-		// @ts-expect-error: accessing private _configManager for prototype/demo
-		const configManager = codeIndexManager?._configManager
-		const ollamaOptions =
-			configManager && configManager["ollamaOptions"]
-				? configManager["ollamaOptions"]
-				: { ollamaBaseUrl: "http://localhost:11434" }
-		const modelId = configManager && configManager["modelId"] ? configManager["modelId"] : "nomic-embed-text:latest"
-		const embedder = new CodeIndexOllamaEmbedder({ ...ollamaOptions, ollamaModelId: modelId })
-		const retriever = new DomainVectorRetriever(embedder)
-		// Extract user prompt text
-		const userPrompt = userContent.map((block) => (this.isTextBlock(block) ? block.text : "")).join("\n")
-		console.debug(`[DomainContext] Embedding user prompt:`, userPrompt)
+		const servers = mcpHub.getServers();
+		console.debug('[DomainContext] Servers:', servers);
+		const hasRagMcp = servers.some(server => server.name.toLowerCase().includes("rag-mcp"));
+		console.debug(`[DomainContext] rag-mcp server present: ${hasRagMcp}`);
+		if (!hasRagMcp) {
+			console.debug('[DomainContext] rag-mcp server not found, skipping domain selection pipeline.');
+			return undefined;
+		}
+		const userPrompt = userContent.map((block) => this.isTextBlock(block) ? block.text : "").join("\n");
+
+		// Step 1: Check if RAG is needed for this user query
+		// console.debug('[DomainContext] User prompt:', userPrompt);
+		const shouldRetrieve = await this.shouldRetrieveContext(userPrompt);
+		// console.debug(`[DomainContext] shouldRetrieveContext: ${shouldRetrieve}`);
+		if (!shouldRetrieve) {
+			console.debug('[DomainContext] Skipping RAG pipeline for this prompt.');
+			return undefined;
+		}
+
+		// Step 2: Retrieve available domains from MCP
+		let availableDomains: string[] = [];
 		try {
-			const topChunks = await retriever.getTopChunksForQuery(userPrompt, selectedDomain, 5)
-			console.debug(
-				`[DomainContext] Retrieved top ${topChunks.length} chunks for domain '${selectedDomain}':`,
-				topChunks,
-			)
-			if (topChunks.length > 0) {
-				const contextBlock: Anthropic.Messages.TextBlockParam = {
-					type: "text",
-					text: `[Domain Context]\n${topChunks.map((c) => c.text).join("\n---\n")}`,
+			console.debug('[DomainContext] Calling list_domains tool...');
+			const domainsResp = await mcpHub.callTool('rag-mcp', 'list_domains', {}, 'global');
+			console.debug('[DomainContext] list_domains response:', domainsResp);
+			if (domainsResp && domainsResp.content && domainsResp.content.length > 0) {
+				for (const item of domainsResp.content) {
+					if (item.type === 'text' && typeof item.text === 'string') {
+						try {
+							const parsed = JSON.parse(item.text);
+							if (Array.isArray(parsed)) {
+								availableDomains = parsed;
+								break;
+							}
+						} catch {
+							availableDomains = item.text.split(/[\,\n]/).map(s => s.trim()).filter(Boolean);
+							break;
+						}
+					}
 				}
-				console.debug(`[DomainContext] Injecting domain context block before user prompt.`)
-				return [contextBlock, ...userContent]
-			} else {
-				console.debug(`[DomainContext] No relevant chunks found for domain '${selectedDomain}'.`)
 			}
-		} catch (err) {
-			console.debug(`[DomainContext] Error in domain context pipeline:`, err)
+			console.debug('[DomainContext] Available domains:', availableDomains);
+		} catch (e) {
+			console.debug('[DomainContext] Error calling list_domains:', e);
+			return undefined;
 		}
-		return userContent
+		if (!availableDomains.length) {
+			console.debug('[DomainContext] No available domains found.');
+			return undefined;
+		}
+
+		// Step 3: Ask LLM to select the best domain
+		const domainSelectionPrompt =
+			`You are an expert assistant. Given the following user query and a list of available domains, select the most appropriate domain for the query.\n` +
+			`Reply with the domain name only (exact match, case-sensitive).\n` +
+			`\nUser query: ${userPrompt}\nAvailable domains: ${availableDomains.join(", ")}`;
+
+		let selectedDomain: string | undefined;
+		try {
+			const handler = this.api as unknown as SingleCompletionHandler;
+			if (typeof handler.completePrompt !== "function") {
+				console.debug('[DomainContext] API provider does not support completePrompt.');
+				throw new Error("The current API provider does not support single-prompt completion (completePrompt)");
+			}
+			console.debug('[DomainContext] Sending domain selection prompt to LLM:', domainSelectionPrompt);
+			const llmResp = await handler.completePrompt(domainSelectionPrompt);
+			console.debug('[DomainContext] LLM response for domain selection:', llmResp);
+			if (llmResp) {
+				const match = availableDomains.find(domain => llmResp.trim().split(/\s|,|\n/).includes(domain));
+				selectedDomain = match || llmResp.trim();
+			}
+			console.debug('[DomainContext] Selected domain:', selectedDomain);
+		} catch (e) {
+			console.debug('[DomainContext] Error during LLM domain selection:', e);
+			return undefined;
+		}
+		if (!selectedDomain || !availableDomains.includes(selectedDomain)) {
+			console.debug('[DomainContext] LLM did not select a valid domain.');
+			return undefined;
+		}
+
+		// Step 4: Retrieve RAG context for the selected domain
+		try {
+			const toolArgs = {
+				query: userPrompt,
+				domain: selectedDomain,
+				top_n: 10,
+			};
+			console.debug('[DomainContext] Calling retrieve_context with:', toolArgs);
+			const response = await mcpHub.callTool('rag-mcp', 'retrieve_context', toolArgs, 'global');
+			console.debug('[DomainContext] retrieve_context response:', response);
+			if (!response || !response.content || response.content.length === 0) {
+				console.debug('[DomainContext] retrieve_context returned no content.');
+				return undefined;
+			}
+			let contextText = "";
+			for (const item of response.content) {
+				if (item.type === "text" && typeof item.text === "string") {
+					try {
+						const parsed = JSON.parse(item.text);
+						const chunks = parsed.chunks || [];
+						if (chunks.length > 0) {
+							contextText = chunks
+								.map((chunk: any) => typeof chunk.text === "string" ? chunk.text : "")
+								.filter(Boolean)
+								.join("\n---\n");
+						}
+					} catch (e) {
+						contextText = item.text;
+					}
+				}
+			}
+			console.debug('[DomainContext] Final retrieved context:', contextText);
+			return contextText || undefined;
+		} catch (e) {
+			console.debug('[DomainContext] Error during retrieve_context:', e);
+			return undefined;
+		}
 	}
 }

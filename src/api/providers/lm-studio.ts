@@ -118,6 +118,8 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 				outputTokens = 0
 			}
 
+			console.debug("[LmStudio] Full LLM response:", assistantText)
+
 			yield {
 				type: "usage",
 				inputTokens,

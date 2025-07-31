@@ -26,7 +26,6 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 } from "./sections"
-// ...existing code...
 
 async function generatePrompt(
 	context: vscode.ExtensionContext,
@@ -59,12 +58,11 @@ async function generatePrompt(
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
-	const dominConfig = getDomainBySlug(domain) || domains.find((d) => d.slug === domain) || domains[0]
-	const domaindetails = getDomainSelection(domain, promptComponent)
+	// const domaindetails = getDomainSelection(domain, promptComponent)
 
 	// Debug logging for role definitions
-	console.debug("[SYSTEM_PROMPT] Mode roleDefinition:", roleDefinition)
-	console.debug("[SYSTEM_PROMPT] Domain roleDefinition:", domaindetails.roleDefinition)
+	// console.debug("[SYSTEM_PROMPT] Mode roleDefinition:", roleDefinition)
+	// console.debug("[SYSTEM_PROMPT] Domain roleDefinition:", domaindetails.roleDefinition)
 
 	const [modesSection, mcpServersSection] = await Promise.all([
 		getModesSection(context),
@@ -76,8 +74,6 @@ async function generatePrompt(
 	const codeIndexManager = CodeIndexManager.getInstance(context)
 
 	const basePrompt = `${roleDefinition}
-
-    ${domaindetails.roleDefinition}
 
 ${markdownFormattingSection()}
 
@@ -182,18 +178,19 @@ export const SYSTEM_PROMPT = async (
 			{ language: language ?? formatLanguage(vscode.env.language), rooIgnoreInstructions },
 		)
 
-		// For file-based prompts, don't include the tool sections
-		return `${roleDefinition}
+		const prompt = `${roleDefinition}
 
 ${fileCustomSystemPrompt}
 
 ${customInstructions}`
+		// console.log("[SYSTEM_PROMPT] Final system prompt (file-based):", prompt)
+		return prompt
 	}
 
 	// If diff is disabled, don't pass the diffStrategy
 	const effectiveDiffStrategy = diffEnabled ? diffStrategy : undefined
 
-	return generatePrompt(
+	const prompt = await generatePrompt(
 		context,
 		cwd,
 		supportsComputerUse,
@@ -213,4 +210,6 @@ ${customInstructions}`
 		partialReadsEnabled,
 		settings,
 	)
+	// console.log("[SYSTEM_PROMPT] Final system prompt:", prompt)
+	return prompt
 }

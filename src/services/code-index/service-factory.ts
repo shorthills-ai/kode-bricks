@@ -4,6 +4,7 @@ import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
 import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
 import { EmbedderProvider, getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
+import { FaissVectorStore } from "./vector-store/faiss-vector-store"
 import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
 import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
 import { CodeIndexConfigManager } from "./config-manager"
@@ -115,10 +116,11 @@ export class CodeIndexServiceFactory {
 				config.vectorStoreApiKey,
 			)
 		} else if (config.vectorStoreType === "faiss") {
-			// Assuming a FaissVectorStore class exists
-			// return new FaissVectorStore(this.workspacePath, config.vectorStoreUrl, vectorSize)
-			console.debug(`[CodeIndexServiceFactory] Faiss vector store is not implemented yet`)
-			throw new Error("Faiss vector store is not implemented yet")
+			return new FaissVectorStore(
+				this.workspacePath,
+				config.vectorStoreUrl,
+				vectorSize
+			)
 		} else if (config.vectorStoreType === "chroma") {
 			// Assuming a ChromaVectorStore class exists
 			// return new ChromaVectorStore(this.workspacePath, config.vectorStoreUrl, vectorSize)
